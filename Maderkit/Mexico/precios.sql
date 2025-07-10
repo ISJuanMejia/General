@@ -8,8 +8,8 @@ BEGIN TRY
     /*
     *   Producción
     */
-    DECLARE @cadena_conexion_produccion      VARCHAR(255)    =   '';
-    DECLARE @base_datos_produccion  VARCHAR(255)    =   '';
+    DECLARE @cadena_conexion_produccion VARCHAR(255)    =   '';
+    DECLARE @base_datos_produccion      VARCHAR(255)    =   '';
 
     /*
     *   Conexión al ERP
@@ -129,7 +129,7 @@ BEGIN TRY
                 v121_id_cia =  1
                 AND
                 v121_id_barras_principal    =  variantes.sku_erp
-            INNER JOIN EDMERPDB.unoee.dbo.t126_mc_items_precios AS  t126    ON
+            INNER JOIN @t126 AS  t126    ON
                 f126_id_cia     =   1
                 AND
                 f126_rowid_item =   v121_rowid_item
@@ -141,7 +141,7 @@ BEGIN TRY
             t126.f126_fecha_activacion  =   (
                 SELECT
                     MAX(f126_fecha_activacion)
-                FROM EDMERPDB.unoee.dbo.t126_mc_items_precios 
+                FROM @t126 
                 WHERE
                     f126_id_cia             =   1
                     AND

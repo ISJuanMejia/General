@@ -1,28 +1,27 @@
 BEGIN TRY
-
     /*
     *   Pruebas
     */
-    DECLARE @server_pruebas     VARCHAR(255)    =   'server=ec2-3-216-46-219.compute-1.amazonaws.com;uid=Maderkitmex;pwd=Maderkitmex$12$%';
-    DECLARE @base_datos_pruebas VARCHAR(255)    =   'UnoEE_Maderkitmex_Pruebas';
+    DECLARE @cadena_conexion_pruebas    VARCHAR(255)    =   'server=ec2-52-6-38-24.compute-1.amazonaws.com;uid=maderkit;pwd=Maderkit$12$%';
+    DECLARE @base_datos_pruebas         VARCHAR(255)    =   'UnoEE_Maderkit_Pruebas';
 
     /*
     *   Producción
     */
-    DECLARE @server_produccion      VARCHAR(255)    =   '';
-    DECLARE @base_datos_produccion  VARCHAR(255)    =   '';
+    DECLARE @cadena_conexion_produccion VARCHAR(255)    =   '';
+    DECLARE @base_datos_produccion      VARCHAR(255)    =   '';
 
     /*
     *   Conexión al ERP
     */
     DECLARE @pruebas    BIT =   1;
 
-    DECLARE @server     VARCHAR(255)    =
+    DECLARE @cadena_conexion     VARCHAR(255)    =
         CASE
             WHEN    @pruebas    =   0
-                THEN    @server_produccion
+                THEN    @cadena_conexion_produccion
             WHEN    @pruebas    =   1
-                THEN    @server_pruebas
+                THEN    @cadena_conexion_pruebas
         END;
 
     DECLARE @base_datos VARCHAR(255)    =
@@ -32,6 +31,71 @@ BEGIN TRY
             WHEN    @pruebas    =   1
                 THEN    @base_datos_pruebas
         END;
+    
+    /*  Obtener información de la v121 del ERP  */
+    DECLARE @v121    TABLE  (
+        v121_id_cia                 INT,
+        v121_id_barras_principal    VARCHAR(40),
+        v121_rowid_item             INT
+    );
+
+    INSERT INTO @v121
+    EXEC('
+        SELECT 
+            v121_id_cia
+            ,v121_id_barras_principal
+            ,v121_rowid_item
+        FROM OPENROWSET(
+            ''SQLNCLI''
+            ,''' + @cadena_conexion + '''
+            ,''
+                SELECT 
+                    v121_id_cia
+                    ,v121_id_barras_principal
+                    ,v121_rowid_item
+                FROM ' + @base_datos + '.dbo.v121
+                WHERE
+                    v121_id_cia = 1
+            ''
+        )
+    ')
+
+    /*  Obtener información de la t126_mc_items_precios del ERP  */
+    DECLARE @t126    TABLE  (
+        f126_precio             DECIMAL(18, 2),
+        f126_rowid_item         INT,
+        f126_id_lista_precio    VARCHAR(3),
+        f126_fecha_activacion   DATETIME,
+        f126_id_cia             INT
+    );
+
+    INSERT INTO @t126
+    EXEC('
+        SELECT 
+            f126_precio
+            ,f126_rowid_item
+            ,f126_id_lista_precio
+            ,f126_fecha_activacion
+            ,f126_id_cia
+        FROM OPENROWSET(
+            ''SQLNCLI''
+            ,''' + @cadena_conexion + '''
+            ,''
+                SELECT 
+                    f126_precio
+                    ,f126_rowid_item
+                    ,f126_id_lista_precio
+                    ,f126_fecha_activacion
+                    ,f126_id_cia
+                FROM ' + @base_datos + '.dbo.t126_mc_items_precios
+                WHERE
+                    f126_id_cia = 1
+            ''
+        )
+    ')
+
+    SELECT * FROM @v121;
+    SELECT * FROM @t126;
 
     MERGE INTO dbo.precios AS target
     USING (

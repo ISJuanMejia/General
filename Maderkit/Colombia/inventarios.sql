@@ -40,8 +40,8 @@
 BEGIN TRY
 
     /*  Conexión a la base de datos */
-    DECLARE @cadena_conexion VARCHAR(100) = 'server=ec2-3-216-46-219.compute-1.amazonaws.com;uid=Maderkitmex;pwd=Maderkitmex$12$%';
-    DECLARE @base_datos      VARCHAR(100) = 'UnoEE_Maderkitmex_Pruebas';
+    DECLARE @cadena_conexion VARCHAR(100) = 'server=ec2-52-6-38-24.compute-1.amazonaws.com;uid=maderkit;pwd=Maderkit$12$%';
+    DECLARE @base_datos      VARCHAR(100) = 'UnoEE_Maderkit_Pruebas';
 
     -- Paso 1: Extraer datos de variantes relevantes
     DECLARE @variantes  TABLE(
