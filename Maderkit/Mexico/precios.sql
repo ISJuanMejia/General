@@ -1,3 +1,45 @@
+/*
+    ------------------------------------------------------------------------------
+    Script de sincronización de precios desde el ERP hacia la tabla local 'precios'
+    ------------------------------------------------------------------------------
+    Descripción:
+    Este script realiza la extracción y sincronización de información de precios 
+    desde el ERP (UnoEE) hacia una tabla local llamada 'precios'. Utiliza conexiones 
+    dinámicas para seleccionar entre ambiente de pruebas y producción, y emplea 
+    OPENROWSET para consultar las tablas remotas 'v121' y 't126_mc_items_precios'.
+
+    Pasos principales:
+    1. Define las cadenas de conexión y bases de datos para pruebas y producción.
+    2. Selecciona el ambiente de trabajo mediante la variable @pruebas.
+    3. Extrae información de productos (v121) y precios (t126_mc_items_precios) 
+       desde el ERP usando OPENROWSET y las almacena en tablas temporales.
+    4. Realiza un MERGE sobre la tabla local 'precios' para actualizar o insertar 
+       los precios más recientes de los productos, generando un objeto JSON con 
+       la estructura de precios.
+    5. Maneja errores mediante TRY...CATCH, imprimiendo el mensaje de error en caso 
+       de fallo.
+
+    Notas:
+    - El script está preparado para funcionar tanto en ambiente de pruebas como 
+      de producción, aunque las cadenas de conexión de producción están vacías 
+      por defecto.
+    - El objeto JSON generado para el campo 'precio_obj' incluye los precios base, 
+      de lista y precios fijos para la política comercial '1'.
+    - Solo se consideran precios con fecha de activación más reciente y mayor a 1.
+    - El script asume la existencia de las tablas 'variantes', 'productos' y 
+      'precios' en la base de datos local, así como las tablas remotas en el ERP.
+
+    Parámetros principales:
+    - @pruebas: Indica si se usa ambiente de pruebas (1) o producción (0).
+    - @cadena_conexion, @base_datos: Determinados dinámicamente según el ambiente.
+
+    Seguridad:
+    - No incluir credenciales sensibles en ambientes de producción.
+    - Revisar permisos necesarios para el uso de OPENROWSET.
+
+    Autor: Juan Camilo Mejía Echavarría
+    Fecha de creación: 10/07/2025
+*/
 BEGIN TRY
     /*
     *   Pruebas
@@ -93,9 +135,6 @@ BEGIN TRY
             ''
         )
     ')
-
-    SELECT * FROM @v121;
-    SELECT * FROM @t126;
 
     MERGE INTO dbo.precios AS target
     USING (
