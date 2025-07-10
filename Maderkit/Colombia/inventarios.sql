@@ -38,10 +38,38 @@
     ------------------------------------------------------------------------------------------
 */
 BEGIN TRY
+    /*
+    *   Pruebas
+    */
+    DECLARE @cadena_conexion_pruebas    VARCHAR(255)    =   'server=ec2-52-6-38-24.compute-1.amazonaws.com;uid=maderkit;pwd=Maderkit$12$%';
+    DECLARE @base_datos_pruebas         VARCHAR(255)    =   'UnoEE_Maderkit_Pruebas';
 
-    /*  Conexión a la base de datos */
-    DECLARE @cadena_conexion VARCHAR(100) = 'server=ec2-52-6-38-24.compute-1.amazonaws.com;uid=maderkit;pwd=Maderkit$12$%';
-    DECLARE @base_datos      VARCHAR(100) = 'UnoEE_Maderkit_Pruebas';
+    /*
+    *   Producción
+    */
+    DECLARE @cadena_conexion_produccion VARCHAR(255)    =   '';
+    DECLARE @base_datos_produccion      VARCHAR(255)    =   '';
+
+    /*
+    *   Conexión al ERP
+    */
+    DECLARE @pruebas    BIT =   1;
+
+    DECLARE @cadena_conexion     VARCHAR(255)    =
+        CASE
+            WHEN    @pruebas    =   0
+                THEN    @cadena_conexion_produccion
+            WHEN    @pruebas    =   1
+                THEN    @cadena_conexion_pruebas
+        END;
+
+    DECLARE @base_datos VARCHAR(255)    =
+        CASE
+            WHEN    @pruebas    =   0
+                THEN    @base_datos_produccion
+            WHEN    @pruebas    =   1
+                THEN    @base_datos_pruebas
+        END;
 
     -- Paso 1: Extraer datos de variantes relevantes
     DECLARE @variantes  TABLE(
