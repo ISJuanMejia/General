@@ -1,12 +1,47 @@
+/*
+    ------------------------------------------------------------------------------------------
+    Script para sincronización y cálculo de inventarios por variante y bodega desde ERP a BD local
+    ------------------------------------------------------------------------------------------
+    Descripción general:
+    Este script realiza la extracción, transformación y carga (ETL) de información de inventarios
+    desde una base de datos ERP remota hacia una estructura local, permitiendo la actualización
+    y sincronización de cantidades de inventario por variante de producto y bodega.
+
+    Pasos principales:
+    1. Conexión a la base de datos ERP y declaración de variables de conexión.
+    2. Extracción de variantes relevantes para la tienda seleccionada.
+    3. Obtención de datos de inventario desde tablas del ERP (v121, t400_cm_existencia, t150_mc_bodegas)
+       utilizando OPENROWSET para conexión remota.
+    4. Cálculo de cantidades disponibles por variante y agrupación por bodega lógica (1_1 y 1_3).
+    5. Generación de combinaciones de variantes con ambas bodegas, asegurando que cada variante tenga
+       registro para ambas, incluso si la cantidad es cero.
+    6. Eliminación de posibles duplicados, dejando solo el registro más reciente por combinación.
+    7. (Comentado) MERGE para actualizar o insertar registros en la tabla final de inventarios.
+    8. Limpieza de variables tipo tabla utilizadas como temporales.
+    9. Manejo de errores mediante TRY...CATCH.
+
+    Notas:
+    - El script utiliza variables tipo tabla para manipulación intermedia de datos.
+    - El campo 'inventario_obj' se genera en formato JSON para integración con sistemas externos.
+    - El MERGE está comentado; descomentar para ejecutar la actualización/inserción final.
+    - El script está preparado para ejecutarse en SQL Server.
+    - Se recomienda revisar y proteger las credenciales de conexión antes de uso en producción.
+
+    Parámetros importantes:
+    - @cadena_conexion: Cadena de conexión al ERP remoto.
+    - @base_datos: Nombre de la base de datos ERP.
+    - id_tienda: Filtro para la tienda específica (actualmente fijo en 1).
+    - Bodegas lógicas: '1_1' y '1_3' corresponden a agrupaciones de bodegas físicas del ERP.
+
+    Autor: Juan Camilo Mejía Echavarría
+    Fecha de creación: 10/07/2025
+    ------------------------------------------------------------------------------------------
+*/
 BEGIN TRY
 
     /*  Conexión a la base de datos */
     DECLARE @cadena_conexion VARCHAR(100) = 'server=ec2-3-216-46-219.compute-1.amazonaws.com;uid=Maderkitmex;pwd=Maderkitmex$12$%';
     DECLARE @base_datos      VARCHAR(100) = 'UnoEE_Maderkitmex_Pruebas';
-
-    -- Verificar y eliminar tablas temporales si existen
-    IF OBJECT_ID('tempdb..#ResultadoFinalDeduplicado') IS NOT NULL DROP TABLE #ResultadoFinalDeduplicado;
-    IF OBJECT_ID('tempdb..#ResultadoFinalDeduplicado_Deduplicado') IS NOT NULL DROP TABLE #ResultadoFinalDeduplicado_Deduplicado;
 
     -- Paso 1: Extraer datos de variantes relevantes
     DECLARE @variantes  TABLE(
@@ -253,7 +288,30 @@ BEGIN TRY
             THEN '1_3'
         END;
 
-    -- Paso 3: Generar combinaciones de variantes con ambas bodegas (1_1 y 1_3)
+    -- Paso 3: Generar combinaciones de variantes con ambas bodegas (1_1 y 1_3) usando variable tipo tabla
+    DECLARE @InventarioCombinadoPorBodega TABLE (
+        id_tienda INT,
+        id_variante INT,
+        id_variante_ecommerce INT,
+        id_bodega_ecommerce VARCHAR(10),
+        sku_erp VARCHAR(40),
+        cantidad INT,
+        inventario_obj NVARCHAR(MAX),
+        sincronizado INT,
+        fecha_sincronizacion DATETIME
+    );
+
+    INSERT INTO @InventarioCombinadoPorBodega (
+        id_tienda,
+        id_variante,
+        id_variante_ecommerce,
+        id_bodega_ecommerce,
+        sku_erp,
+        cantidad,
+        inventario_obj,
+        sincronizado,
+        fecha_sincronizacion
+    )
     SELECT 
         v.id_tienda,
         v.id_variante,
@@ -272,7 +330,6 @@ BEGIN TRY
             '), -- Generar inventario_obj
         sincronizado    =   0,
         fecha_sincronizacion    =   GETDATE()
-    INTO #ResultadoFinalDeduplicado
     FROM @variantes AS  v
         CROSS JOIN (VALUES ('1_1'), ('1_3')) b(id_bodega_ecommerce) -- Crear combinaciones explícitas para las dos bodegas
         LEFT JOIN @inventarioERP    AS  i
@@ -281,29 +338,49 @@ BEGIN TRY
                 AND
                 b.id_bodega_ecommerce   =   i.id_bodega_ecommerce;
 
-    
-    /*
-    -- Paso 4: Eliminar duplicados en #ResultadoFinalDeduplicado
+
+    -- Paso 4: Eliminar duplicados en @InventarioCombinadoPorBodega
+    DECLARE @InventarioFinalSinDuplicados TABLE (
+        id_tienda INT,
+        id_variante INT,
+        id_variante_ecommerce INT,
+        id_bodega_ecommerce VARCHAR(10),
+        sku_erp VARCHAR(40),
+        cantidad INT,
+        inventario_obj NVARCHAR(MAX),
+        sincronizado INT,
+        fecha_sincronizacion DATETIME
+    );
+
     WITH CTE AS (
         SELECT
             *,
             ROW_NUMBER() OVER (
                 PARTITION BY 
-                    id_tienda
-                    ,id_variante_ecommerce
-                    ,id_bodega_ecommerce
+                    id_tienda,
+                    id_variante_ecommerce,
+                    id_bodega_ecommerce
                 ORDER BY fecha_sincronizacion DESC
             ) AS rn
-        FROM #ResultadoFinalDeduplicado
+        FROM @InventarioCombinadoPorBodega
     )
-    SELECT *
-    INTO #ResultadoFinalDeduplicado_Deduplicado
+    INSERT INTO @InventarioFinalSinDuplicados
+    SELECT
+        id_tienda,
+        id_variante,
+        id_variante_ecommerce,
+        id_bodega_ecommerce,
+        sku_erp,
+        cantidad,
+        inventario_obj,
+        sincronizado,
+        fecha_sincronizacion
     FROM CTE
-    WHERE   rn  =   1;
-    
+    WHERE rn = 1;   
+    /*
     -- Paso 5: MERGE para actualizar las filas que tienen diferencias
     MERGE INTO dbo.inventarios AS target
-    USING #ResultadoFinalDeduplicado_Deduplicado AS source
+    USING @InventarioFinalSinDuplicados AS source
         ON (
             target.id_tienda    =   source.id_tienda
             AND
@@ -340,11 +417,11 @@ BEGIN TRY
             source.fecha_sincronizacion
         );
 
-    -- Limpieza de tablas temporales
-    DELETE @inventarioERP;
-    DROP TABLE #ResultadoFinalDeduplicado;
-    DROP TABLE #ResultadoFinalDeduplicado_Deduplicado;
     */
+    /*  Limpieza de tablas temporales   */
+    DELETE @inventarioERP;
+    DELETE @InventarioCombinadoPorBodega;
+    DELETE @InventarioFinalSinDuplicados;
 
 END TRY
 BEGIN CATCH
