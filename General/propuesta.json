@@ -1,0 +1,65 @@
+{
+  "VTEX": [
+    {
+      "Planeación, diseño y analisis": [
+        "Realizar solicitud de accesos, credenciales y permisos"
+      ]
+    },
+    {
+      "Conectores": [
+        {
+          "Terceros": [
+            "Terceros",
+            "Clientes",
+            "Impuestos y retenciones",
+            "Criterios",
+            "Entidades dinamicas"
+          ],
+          "Pedidos": ["Pedido", "Movimiento pedido comercial", "Descuentos"],
+          "Compromiso": [],
+          "Factura": []
+        }
+      ]
+    },
+    {
+      "Interfaces": [
+        "Descargar Catálogo",
+        {
+          "Productos": [
+            "Insertar Productos",
+            "Actualizar Productos",
+            "Actualizar Especificaciones Productos"
+          ]
+        },
+        {
+          "SKUs": [
+            "Insertar Skus",
+            "Actualizar Skus",
+            "Insertar Actualizar Especificaciones Skus"
+          ]
+        },
+        "Insertar Actualizar Precios",
+        "Insertar Actualizar Inventarios",
+        "Descargar Ordenes",
+        {
+          "Importar Ordenes ERP": [
+            "Terceros clientes",
+            "Pedidos",
+            "Compromisos",
+            "Factura"
+          ]
+        },
+        "Cambio Estado Start Handling",
+        "Cambio Estado Invoiced"
+      ]
+    },
+    { "Desarrollo especial": ["Generar Guia"] },
+    "Montaje de la solución",
+    "Capacitación de la integración",
+    "Seguimiento a pruebas funcionales",
+    "Ajustes de acuerdo a hallazgos",
+    "Liberación a producción",
+    "Estabilización del ambiente productivo",
+    "Documentación de la integración"
+  ]
+}
