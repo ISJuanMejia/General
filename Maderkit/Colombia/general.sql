@@ -1,151 +1,3 @@
-SELECT * FROM t038_mm_clases_retencion
-
-/*  COLOMBIA  */
---> f038_id | f038_descripcion            | f038_sigla <--
---> ================================================== <--
---> 1       | Renta                       | Renta      <--
---> 11      | RETENCION DE BIENES         | RTEBIEN    <--
---> 12      | RETENCION DE HONORARIOS     | RTEHONO    <--
---> 13      | RETENCION DE SERVICIOS      | RTESERV    <--
---> 14      | RETENCION DE ARRENDAMIENTOS | RTEARRE    <--
---> 15      | RETENCION DE COMISIONES     | RTECOMI    <--
---> 21      | RETENCION DE IVA BIENES     | RTEIVABN   <--
---> 22      | RETENCION DE IVA SERVICIOS  | RTIVASER   <--
---> 31      | RETENCION ICA SERVICIOS     | ICASERV    <--
---> 32      | RETENCION ICA BIENES        | ICABIEN    <--
---> 41      | AUTORRETENCION RENTA        | AUTORTA    <--
---> 42      | AUTORRETENCION ICA EN YUMBO | AUTICAY    <--
---> 91      | DESCUENTOS                  | DCTO       <--
-
-SELECT * FROM t040_mm_llaves_retencion
-WHERE f040_id_cia = 1
-ORDER BY f040_id_clase_retencion
-
-/*  COLOMBIA  */
---> f040_id | f040_descripcion                      | f040_id_clase_retencion <--
---> ========================================================================= <--
---> 1001    | RTEFTE BIENES (14) 2.5%               | 11                      <--
---> 1002    | RETEFTE BIENES (14) 3.5%              | 11                      <--
---> 1003    | OTRA COMPRAS 2.5%                     | 11                      <--
---> 1004    | OTRAS COMPRAS 3.5%                    | 11                      <--
---> 1005    | COMPRA ACTIVO FIJO 2.5%               | 11                      <--
---> 1006    | COMPRA ACTIVO FIJO 3.5%               | 11                      <--
---> 1007    | LICENCIAS 3.5%                        | 11                      <--
--->---------------------------------------------------------------------------<--
---> 1101    | RTEFTE HONORARIOS 11%                 | 12                      <--
---> 1102    | RETEFTE HONORARIOS 10%                | 12                      <--
---> 1103    | RETEFTE HONORARIOS INGENIERIA PROY 6% | 12                      <--
--->---------------------------------------------------------------------------<--
---> 1201    | RETEFTE SERVICIOS 4%                  | 13                      <--
---> 1202    | RETEFTE SERVICIOS 6%                  | 13                      <--
---> 1203    | RETEFTE SERVICIOS 1%                  | 13                      <--
---> 1204    | RETEFUENTE SERVICIOS 2%               | 13                      <--
---> 1205    | RTEFTE SERVICIOS DE CONSTRUCCION 2%   | 13                      <--
---> 1206    | RTEFTE INTERESES 4%                   | 13                      <--
---> 1207    | RTEFTE SERVICIOS 3.5%                 | 13                      <--
---> 1208    | RTEFTE SERVICIOS TP 3.5%              | 13                      <--
---> 1209    | RTEFTE SERVICIOS  3%o                 | 13                      <--
---> 1210    | RTEFTE SERVICIOS  3,5%                | 13                      <--
---> 1211    | RTEFTE SERVICIOS TP 3.5%              | 13                      <--
---> 1212    | RETENCION DEL 10% EXTERIOR            | 13                      <--
--->---------------------------------------------------------------------------<--
---> 1301    | RETE ARRENDAMIENTO 3.5%               | 14                      <--
---> 1302    | RETE ARRENDAMIENTO 4%                 | 14                      <--
--->---------------------------------------------------------------------------<--
---> 1401    | RETEFTE COMISIONES 10%                | 15                      <--
---> 1402    | RETEFTE COMISIONES 11%                | 15                      <--
--->---------------------------------------------------------------------------<--
---> 2001    | RETEIVA BIENES  15%                   | 21                      <--
--->---------------------------------------------------------------------------<--
---> 2002    | RETEIVA SERVICIOS 15%                 | 22                      <--
---> 2003    | RETEIVA REGIMEN SIMPLE 15% BIENES     | 22                      <--
---> 2004    | RETEIVA DEL 100%                      | 22                      <--
--->---------------------------------------------------------------------------<--
---> 3001    | RETEICA HONORARIOS 10 x 1000          | 31                      <--
---> 3007    | RETEICA  ARRIENDOS 10X1000            | 31                      <--
---> 3008    | RETEICA  SERVICIOS 6X1000             | 31                      <--
---> 3009    | RETEICA SERVICIOS 4 X 1000            | 31                      <--
---> 3010    | RETEICA EN SERVICIOS 5X1000           | 31                      <--
---> 3011    | RETEICA EN SERVICIOS 7X1000           | 31                      <--
---> 3012    | RETEICA EN SERVICIOS 8X1000           | 31                      <--
---> 3013    | RETEICA EN SERVICIOS 10 X 1000        | 31                      <--
---> 3014    | RETEICA EN SERVICIOS 3 X 1000         | 31                      <--
---> 3016    | YUM - RETEICA EN SERVICIOS 11,5%o     | 31                      <--
--->---------------------------------------------------------------------------<--
---> 3002    | RETEICA BIENES 6X1000                 | 32                      <--
---> 3003    | RETEICA COMPRAS 5 X 1000              | 32                      <--
---> 3004    | RETEICA  6 X 1000                     | 32                      <--
---> 3005    | RETEICA EN COMPRAS 7 X 1000           | 32                      <--
---> 3006    | RETEICA EN COMPRAS 8X1000             | 32                      <--
---> 3015    | RETEICA EN COMPRAS 6,5 X 1000         | 32                      <--
--->---------------------------------------------------------------------------<--
---> 4001    | AUTORTA - 0.40%                       | 41                      <--
---> 4002    | AUTORRETENCION 0,55% DECRETO 261      | 41                      <--
--->---------------------------------------------------------------------------<--
---> 4101    | AUTORRETENCION DE ICA 0.6             | 42                      <--
--->---------------------------------------------------------------------------<--
---> 9002    | DCTO 2%                               | 91                      <--
---> 9003    | DCTO 3%                               | 91                      <--
---> 9005    | DCTO 5%                               | 91                      <--
---> 9010    | DCTO 10%                              | 91                      <--
-
-SELECT * FROM t044_mm_clase_impuesto_valores
-
-/*  COLOMBIA  */
---> f044_id_clase_impuesto | f044_ind_tipo_indicador | f044_id | f044_descripcion     <--
---> ================================================================================= <--
---> 1                      | 1                       | 0       | Libre de IVA         <--
---> 1                      | 1                       | 1       | Le aplica IVA        <--
---> 1                      | 2                       | 0       | Libre de impuesto    <--
---> 1                      | 2                       | 1       | Responsable de IVA   <--
---> 1                      | 2                       | 2       | Régimen simplificado <--
---> 1                      | 3                       | 0       | Libre de impuesto    <--
---> 1                      | 3                       | 1       | Responsable de IVA   <--
---> 1                      | 4                       | 0       | Libre de IVA         <--
---> 1                      | 4                       | 1       | Le aplica IVA        <--
--->-----------------------------------------------------------------------------------<--
---> 2                      | 3                       | 0       | Libre de impuesto    <--
---> 2                      | 3                       | 1       | Responsable de ICA   <--
---> 2                      | 4                       | 0       | Libre de impuesto    <--
---> 2                      | 4                       | 1       | Le aplica ICA        <--
--->-----------------------------------------------------------------------------------<--
---> 3                      | 1                       | 0       | Libre de IVA         <--
---> 3                      | 1                       | 1       | Le aplica IVA        <--
---> 3                      | 3                       | 0       | Libre de impuesto    <--
---> 3                      | 3                       | 1       | Responsable de IVA   <--
---> 3                      | 4                       | 0       | Libre de IVA         <--
---> 3                      | 4                       | 1       | Le aplica IVA        <--
---> 3                      | 2                       | 0       | Libre de impuesto    <--
---> 3                      | 2                       | 1       | Responsable de IVA   <--
---> 3                      | 2                       | 2       | Régimen simplificado <--
--->-----------------------------------------------------------------------------------<--
---> 33                     | 1                       | 0       | Libre de INPP        <--
---> 33                     | 1                       | 1       | Liquida INPP         <--
---> 33                     | 3                       | 0       | Libre de INPP        <--
---> 33                     | 3                       | 1       | Liquida INPP         <--
---> 33                     | 4                       | 0       | Libre de INPP        <--
---> 33                     | 4                       | 1       | Responsable de INPP  <--
---> 33                     | 2                       | 0       | Libre de INPP        <--
---> 33                     | 2                       | 1       | Responsable de INPP  <--
--->-----------------------------------------------------------------------------------<--
---> 34                     | 1                       | 0       | Libre de IBUA        <--
---> 34                     | 1                       | 1       | Liquida IBUA         <--
---> 34                     | 3                       | 0       | Libre de IBUA        <--
---> 34                     | 3                       | 1       | Liquida IBUA         <--
---> 34                     | 4                       | 0       | Libre de IBUA        <--
---> 34                     | 4                       | 1       | Responsable de IBUA  <--
---> 34                     | 2                       | 0       | Libre de IBUA        <--
---> 34                     | 2                       | 1       | Responsable de IBUA  <--
--->-----------------------------------------------------------------------------------<--
---> 35                     | 1                       | 0       | Libre de IPCU        <--
---> 35                     | 1                       | 1       | Liquida IPCU         <--
---> 35                     | 3                       | 0       | Libre de IPCU        <--
---> 35                     | 3                       | 1       | Liquida IPCU         <--
---> 35                     | 4                       | 0       | Libre de IPCU        <--
---> 35                     | 4                       | 1       | Responsable de IPCU  <--
---> 35                     | 2                       | 0       | Libre de IPCU        <--
---> 35                     | 2                       | 1       | Responsable de IPCU  <--
-
 ---- * -------- * ----
 ---- * TERCEROS * ----
 ---- * -------- * ----
@@ -206,6 +58,34 @@ FROM t035_mm_clases_impuesto
 ----* 1       | IVA              | IVA        <--
 
 ---- * Retenciones
+
+SELECT * FROM t038_mm_clases_retencion
+
+----> f038_id | f038_descripcion            | f038_sigla <--
+----> ================================================== <--
+----> 1       | Renta                       | Renta      <--
+----> 11      | RETENCION DE BIENES         | RTEBIEN    <--
+----> 12      | RETENCION DE HONORARIOS     | RTEHONO    <--
+----> 13      | RETENCION DE SERVICIOS      | RTESERV    <--
+----> 14      | RETENCION DE ARRENDAMIENTOS | RTEARRE    <--
+----> 15      | RETENCION DE COMISIONES     | RTECOMI    <--
+----> 21      | RETENCION DE IVA BIENES     | RTEIVABN   <--
+----> 22      | RETENCION DE IVA SERVICIOS  | RTIVASER   <--
+----> 31      | RETENCION ICA SERVICIOS     | ICASERV    <--
+----> 32      | RETENCION ICA BIENES        | ICABIEN    <--
+----* 41      | AUTORRETENCION RENTA        | AUTORTA    <--
+----> 42      | AUTORRETENCION ICA EN YUMBO | AUTICAY    <--
+----> 91      | DESCUENTOS                  | DCTO       <--
+
+SELECT * FROM t040_mm_llaves_retencion
+WHERE f040_id_cia = 1
+ORDER BY f040_id_clase_retencion
+
+--> f040_id | f040_descripcion                      | f040_id_clase_retencion <--
+--> ========================================================================= <--
+--> 4001    | AUTORTA - 0.40%                       | 41                      <--
+--> 4002    | AUTORRETENCION 0,55% DECRETO 261      | 41                      <--
+
 
 --------------------------------------------------------------------------------------
 

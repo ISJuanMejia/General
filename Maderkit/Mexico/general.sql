@@ -43,95 +43,9 @@ SELECT * FROM t203_mm_tipo_ident
 
 SELECT * FROM t035_mm_clases_impuesto
 
-/*  MEXICO  */
 --> f035_id | f035_descripcion                         | f035_sigla <--
 --> =============================================================== <--
 --> 1       | IVA MX                                   | IVA        <--
---> 2       | ICA                                      | ICA        <--
---> 33      | Impuesto Nacional Productos Plásticos    | INPP       <--
---> 34      | Impto Bebidas Ultraprocesadas Azucaradas | IBUA       <--
---> 35      | Impto Produc Comestibles Ultraprocesados | IPCU       <--
---> 3       | IESP AL COMBUSTIBLE                      | IESP       <--
-
-SELECT * FROM t037_mm_llaves_impuesto
-
-/*  MEXICO  */
---> f037_id | f037_descripcion    | f037_id_clase_impuesto <--
---> ====================================================== <--
---> 001     | IVA 16 %            | 1                      <--
---> 002     | IVA 0% - TASA CERO  | 1                      <--
---> 003     | IVA 16% + TASA IESP | 1                      <--
-
-SELECT * FROM t038_mm_clases_retencion
-
-/*  MEXICO  */
---> f038_id | f038_descripcion       | f038_sigla <--
---> ============================================= <--
---> 1       | Retención de Renta ISR | RET-ISR    <--
---> 2       | Retención de IVA       | RET-IVA    <--
---> 3       | Retención de ICA       | ICA        <--
-
-SELECT * FROM t040_mm_llaves_retencion
-
-/*  MEXICO  */
---> f040_id | f040_descripcion              | f040_id_clase_retencion <--
---> ================================================================= <--
---> 001     | RETENCION DE IVA DEL 4%       | 2                       <--
---> 002     | RETENCION DE IVA DEL 10.6666%	| 2                       <--
---> 003     | RETENCION DE ISR DEL 10%      | 1                       <--
---> 004     | RETENCION ISR DEL 1.25%       | 1                       <--
---> 005     | RETENCION DE IVA DEL 16%      | 2                       <--
-
-SELECT * FROM t044_mm_clase_impuesto_valores
-
-/*  MEXICO  */
---> f044_id_clase_impuesto | f044_ind_tipo_indicador | f044_id | f044_descripcion     <--
---> ================================================================================= <--
---> 1                      | 1                       | 0       | Libre de IVA         <--
---> 1                      | 1                       | 1       | Le aplica IVA        <--
---> 1                      | 2                       | 0       | Libre de impuesto    <--
---> 1                      | 2                       | 1       | Responsable de IVA   <--
---> 1                      | 2                       | 2       | Régimen simplificado <--
---> 1                      | 3                       | 0       | Libre de impuesto    <--
---> 1                      | 3                       | 1       | Responsable de IVA   <--
---> 1                      | 4                       | 0       | Libre de IVA         <--
---> 1                      | 4                       | 1       | Le aplica IVA        <--
------------------------------------------------------------------------------------------
---> 2                      | 3                       | 0       | Libre de impuesto    <--
---> 2                      | 3                       | 1       | Responsable de ICA   <--
---> 2                      | 4                       | 0       | Libre de impuesto    <--
---> 2                      | 4                       | 1       | Le aplica ICA        <--
------------------------------------------------------------------------------------------
---> 33                     | 1                       | 0       | Libre de INPP        <--
---> 33                     | 1                       | 1       | Liquida INPP         <--
---> 33                     | 3                       | 0       | Libre de INPP        <--
---> 33                     | 3                       | 1       | Liquida INPP         <--
---> 33                     | 4                       | 0       | Libre de INPP        <--
---> 33                     | 4                       | 1       | Responsable de INPP  <--
---> 33                     | 2                       | 0       | Libre de INPP        <--
---> 33                     | 2                       | 1       | Responsable de INPP  <--
------------------------------------------------------------------------------------------
---> 34                     | 1                       | 0       | Libre de IBUA        <--
---> 34                     | 1                       | 1       | Liquida IBUA         <--
---> 34                     | 3                       | 0       | Libre de IBUA        <--
---> 34                     | 3                       | 1       | Liquida IBUA         <--
---> 34                     | 4                       | 0       | Libre de IBUA        <--
---> 34                     | 4                       | 1       | Responsable de IBUA  <--
---> 34                     | 2                       | 0       | Libre de IBUA        <--
---> 34                     | 2                       | 1       | Responsable de IBUA  <--
------------------------------------------------------------------------------------------
---> 35	                   | 1                       | 0       | Libre de IPCU        <--
---> 35	                   | 1                       | 1       | Liquida IPCU         <--
---> 35	                   | 3                       | 0       | Libre de IPCU        <--
---> 35	                   | 3                       | 1       | Liquida IPCU         <--
---> 35	                   | 4                       | 0       | Libre de IPCU        <--
---> 35	                   | 4                       | 1       | Responsable de IPCU  <--
---> 35	                   | 2                       | 0       | Libre de IPCU        <--
---> 35	                   | 2                       | 1       | Responsable de IPCU  <--
-
-SELECT * FROM t046_mm_cliente_base_impuesto
-
-SELECT * FROM t114_mc_grupos_impo_impuestos
 
 --------------------------------------------------------------------------------------
 
@@ -144,12 +58,20 @@ SELECT * FROM t114_mc_grupos_impo_impuestos
 "Criterios_Clientes": [
     {
         "F207_ID_PLAN_CRITERIOS": "001",
+        "F207_ID_CRITERIO_MAYOR": "1"
+    },
+    {
+        "F207_ID_PLAN_CRITERIOS": "002",
         "F207_ID_CRITERIO_MAYOR": "13"
     }
 ]
 
 *   EXTRANJERO INTERNET
 "Criterios_Clientes": [
+    {
+        "F207_ID_PLAN_CRITERIOS": "001",
+        "F207_ID_CRITERIO_MAYOR": "2"
+    },
     {
         "F207_ID_PLAN_CRITERIOS": "002",
         "F207_ID_CRITERIO_MAYOR": "13"
@@ -188,13 +110,7 @@ WHERE f204_id_cia = 1
 ----* 001          | 1       |  NACIONAL                     <---
 ----* 001          | 2       |  EXTERIOR                     <---
 ---->--------------------------------------------------------<---
-----> 002          | 11      |  MODERNO                      <---
-----> 002          | 12      |  TRADICIONAL                  <---
 ----* 002          | 13      |  INTERNET                     <---
-----> 002          | 15      |  CARPINTERIA ARQUITECTONICA   <---
-----> 002          | 16      |  CLIENTES VARIOS              <---
-----> 002          | 17      |  DISTRIBUIDORES               <---
-----> 002          | 21      |  EXTERIOR                     <---
 
 --------------------------------------------------------------------------------------
 
@@ -210,23 +126,7 @@ WHERE f744_id_cia = 1
 
 ---> f744_rowid | f744_id                    <---
 ---> ======================================= <---
----> 1          | DIOT 1                     <---
----> 2          | DIOT 2                     <---
----> 3          | DIOT 3                     <---
----> 4          | DIOT 4                     <---
----> 5          | FE INFO MEDIO DE PAGO      <---
 ---> 6          | F.E. TERCEROS              <---
----> 7          | F.E. CONDICION DE PAGO     <---
----> 8          | F.E. CATALOGO MONEDAS      <---
----> 9          | F.E. CENTROS DE OPERACION  <---
----> 10         | F.E. DOCUMENTOS            <---
----> 11         | F.E. SAT IMPUESTOS         <---
----> 12         | F.E. SAT ITEM              <---
----> 13         | C.E. NUMERO DE ORDEN       <---
----> 14         | C.E. TRANSFERENCIAS        <---
----> 16         | DATOS SAT                  <---
----> 17         | DATOS COMPLEMENTO PAGO     <---
----> 18         | COMPLEMENTO PAGO FACTORAJE <---
 
 SELECT
     f744_id,
@@ -271,7 +171,7 @@ SELECT
     ) AS entidades
 FROM t744_mm_grupo_entidad
 WHERE
-    f744_rowid = 1
+    f744_rowid = 6
 
 --------------------------------------------------------------------------------------
 
