@@ -3,9 +3,16 @@ DECLARE @conexion       VARCHAR(200)
 DECLARE @listaBodegas   NVARCHAR(MAX);
 DECLARE @sql            NVARCHAR(MAX);
 
+DECLARE @t120_mc_items  TABLE
+(
+    f120_rowid      INT,
+    f120_referencia NVARCHAR(255)
+)
+
 DECLARE @t121_mc_items_extensiones TABLE
 (
     f121_rowid                  INT,
+    f121_rowid_item             INT,
     f121_id_barras_principal    VARCHAR(20)
 );
 
@@ -65,10 +72,28 @@ BEGIN TRY
         @listaBodegas = STRING_AGG('''''' + bodega_erp + '''''', ',')
     FROM @bodegas;
 
+    INSERT INTO @t120_mc_items
+    EXEC('
+        SELECT 
+            f120_rowid,
+            f120_referencia
+        FROM OPENROWSET(
+            ''sqlncli'',
+            ''' + @conexion + ''',
+            ''
+                SELECT 
+                    f120_rowid,
+                    f120_referencia
+                FROM t120_mc_items
+            ''
+        )
+    ')
+
     INSERT INTO @t121_mc_items_extensiones
     EXEC('
         SELECT 
             f121_rowid,
+            f121_rowid_item,
             f121_id_barras_principal
         FROM OPENROWSET(
             ''sqlncli'',
@@ -76,6 +101,7 @@ BEGIN TRY
             ''
                 SELECT 
                     f121_rowid,
+                    f121_rowid_item,
                     f121_id_barras_principal
                 FROM t121_mc_items_extensiones
             ''
@@ -181,17 +207,12 @@ BEGIN TRY
                         ) 
                 END
             ),
-        barcode =   
-            CASE
-                WHEN 
-                    f121_id_barras_principal IS NOT NULL
-                        THEN f121_id_barras_principal
-                WHEN
-                    f131_id IS NOT NULL
-                        THEN f131_id
-            END,
+        barcode =   f120_referencia,
         bodega  =   f150_id
-    FROM @t121_mc_items_extensiones
+    FROM @t120_mc_items
+        INNER JOIN @t121_mc_items_extensiones
+            ON
+                f120_rowid = f121_rowid_item
         LEFT JOIN @t400_cm_existencia
             ON
                 f121_rowid  =   f400_rowid_item_ext
@@ -254,6 +275,10 @@ BEGIN TRY
         LEFT JOIN @inventarios iss 
             ON 
                 i.sku   =   iss.barcode
+    WHERE
+        inventory_item_id   IS NOT NULL
+        AND
+        b.id_location IS NOT NULL
 
     MERGE INTO dbo.inventarios AS TARGET
     USING @inventarios_siesa_shopify AS source
