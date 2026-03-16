@@ -56,7 +56,7 @@
        1 = El SKU viene de t120_mc_items (con extensiones de ítem)
        2 = El SKU viene de t121/t131     (sin extensiones de ítem)
 --------------------------------------------------------------------------- */
-DECLARE @modo TINYINT = 1;
+DECLARE @modo TINYINT = 2;
 
 /* ---------------------------------------------------------------------------
    VARIABLES INTERNAS
