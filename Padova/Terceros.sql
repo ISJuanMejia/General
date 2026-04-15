@@ -24,7 +24,7 @@ SECCIÓN: Variables principales
   Definen la configuración comercial para clientes nacionales (COP) y extranjeros (USD).
 * @ordenes:
   Tabla temporal que almacena las órdenes pendientes de Padova a procesar.
-* @Tercero, @Cliente, @Impuestos:
+* @Terceros, @Cliente, @Impuestos:
   Tablas temporales que almacenan la información procesada antes de generar el JSON final.
 
 ===========================================================
@@ -87,596 +87,678 @@ Fin de la documentación del procedimiento [TERCERO_CLIENTE_PADOVA]
 */
 
 BEGIN TRY
-	DECLARE @json   NVARCHAR(MAX) = '';
-	DECLARE @final  TABLE 
-    (
-		idDocumento         INT,
-		indicaParalelismo   BIT,
-		descripcion         VARCHAR(50),
-		idOrden             VARCHAR(50),
-		json                VARCHAR(max)
+    /*
+		*	Definición de tabla de resultados
+	*/
+	DECLARE @final	TABLE (
+		idDocumento			INT,
+		indicaParalelismo	BIT,
+		descripcion			VARCHAR(50),
+		idOrden				VARCHAR(50),
+		json				VARCHAR(MAX)
 	);
 
-	DECLARE @counter    INT =   1;
-	DECLARE @total      INT;
+	/*
+		*	Definición de información del conector: ID del documento, descripción y si indica paralelismo:
+		*		ID del documento: Consultar en Connekta el Id del Conector.
+		*		Descripción: Nombre del conector
+		*		Indica paralelismo: 1 = Sí, 0 = No, dependiendo si el conector soporta múltiples hilos de ejecución.
+	*/
+	DECLARE	@idDocumento			INT			=	'220762',
+			@descripcionConector	VARCHAR(50)	=	'Ecommerce_Terceros_Clientes',
+			@indicaParalelismo		BIT			=	1;
 
-	DECLARE @order			VARCHAR(30);
+--->================================================================================================================<---
 
-	DECLARE @paisSiesa		NVARCHAR(3),
-			@dptoSiesa		NVARCHAR(3),
-			@ciudadSiesa	NVARCHAR(3);
+	/*
+		*	Configuración de ejecución del script
+	*/
+	DECLARE @batch_size	INT	=   25;	--	*	Cuantas órdenes se traen por petición
 
-	--* INFORMACIÓN DEL CONECTOR *--
-	DECLARE @idDocumento            INT         =   225464;
-	DECLARE @descripcionConector    VARCHAR(50) =   'Tercero_Cliente_Padova_Shopify';
-	DECLARE @indicaParalelismo      BIT         =   1;
+	/*
+		*	Origen de los datos del cliente/tercero
+		*		1 = Desde la sección Customer
+		*		2 = Desde la sección Billing Address
+		*		3 = Desde la sección Customer y si no existe, desde Billing Address
+		*		4 = Desde la sección Billing Address y si no existe, desde Customer
+	*/
+	DECLARE @client_origin_data	INT	=	4;
+
+	DECLARE @path_customer	NVARCHAR(100)	=	'$.customer.default_address';
+	DECLARE @path_billing	NVARCHAR(100)	=	'$.billing_address';
+
+	/*
+		*	Procesar clientes/terceros sin ID
+		*		0 = No procesar clientes/terceros sin ID, incrementar el contador de intentos
+		*		1 = Procesar clientes/terceros sin ID, cambiar el estado de la orden de 1 a 2 y colocar intentos a 0
+	*/
+	DECLARE @process_client_without_id	BIT	=	0;
+
+	/*
+		*	Tipo de identificación:
+		*		C	->	Cédula
+		*		N	->	NIT
+	*/
+	DECLARE @id_tipo_ident_defecto		NVARCHAR(1)	=	'C';
+
+	/*
+		*	Tipo de tercero:
+		*		0	->	Sin identificación
+		*		1	->	Persona natural
+		*		2	->	Persona juridica
+	*/
+	DECLARE @ind_tipo_tercero_defecto	NVARCHAR(1)	=	'1';
 
     /*
-        *   INFORMACIÓN DE TIPO DE TERCERO
-        *   TIPO CLIENTE
-    */
-    DECLARE @id_consumidor_final        NVARCHAR(15)    =   '222222222222';
-    DECLARE @F200_ID_TIPO_IDENT         NVARCHAR(10)    =   'C';
-	DECLARE @F200_IND_TIPO_TERCERO      NVARCHAR(10)    =   '1';
-    DECLARE @id_tipo_cliente_nacional   NVARCHAR(4)     =   '0001';
-    DECLARE @id_tipo_cliente_extranjero NVARCHAR(4)     =   '0002';
+		*	Id tipo de cliente:
+		*		0001	->	Clientes nacionales
+		*		0002	->	Clientes extranjeros
+	*/
+	DECLARE @id_tipo_cliente_nacional   NVARCHAR(4) =   '0001',
+            @id_tipo_cliente_extranjero NVARCHAR(4) =   '0002';
+    
+    /*
+		*	Id lista de precios:
+		*		001	->	Lista de precios COP
+		*		002	->	Lista de precios USD
+	*/
+	DECLARE @id_lista_precios_cop   NVARCHAR(3) =   '001',
+            @id_lista_precios_usd   NVARCHAR(3) =   '002';
 
     /*
-        *   CONDICIÓN DE PAGO
-        *   IDENTIFICACIÓN DE SUCURSAL
-        *   LISTAS DE PRECIOS
-        *   CENTRO DE OPERACIONES
-    */
-    DECLARE @id_cond_pago           NVARCHAR(10)    =   'CRC';
-	DECLARE @Id_sucursal            NVARCHAR(10)    =	'001';
-    DECLARE @id_lista_precios_cop   NVARCHAR(3)     =   '001';
-    DECLARE @id_lista_precios_usd   NVARCHAR(3)     =   '002';
-    DECLARE @id_co                  NVARCHAR(3)     =   '001';
+		*	Id valor tercero en impuestos y retenciones:
+		*		1	->	Id valor tercero COP
+		*		0	->	Id valor tercero USD
+	*/
+	DECLARE @f_id_valor_tercero_cop   NVARCHAR(2) =   '1',
+            @f_id_valor_tercero_usd   NVARCHAR(2) =   '0';
 
-	/* TABLAS TEMPORALES */
-	DECLARE @Tercero	TABLE (
-		F200_ID						NVARCHAR(15),
-		F200_NIT					NVARCHAR(25),
-		F200_ID_TIPO_IDENT			NVARCHAR(1),
-		F200_IND_TIPO_TERCERO		NVARCHAR(1),
-		F200_RAZON_SOCIAL			NVARCHAR(100),
-		F200_APELLIDO1				NVARCHAR(29),
-		F200_APELLIDO2				NVARCHAR(29),
-		F200_NOMBRES				NVARCHAR(40),
-		F200_NOMBRE_EST				NVARCHAR(50),
-		F015_CONTACTO				NVARCHAR(50),
-		F015_DIRECCION1				NVARCHAR(40),
-		F015_DIRECCION2				NVARCHAR(40),
-		F015_DIRECCION3				NVARCHAR(40),
-		F015_ID_PAIS				NVARCHAR(3),
-		F015_ID_DEPTO				NVARCHAR(2),
-		F015_ID_CIUDAD				NVARCHAR(3),
-		F015_TELEFONO				NVARCHAR(20),
-		F015_EMAIL					NVARCHAR(255),
-		F200_FECHA_NACIMIENTO		NVARCHAR(8),
-		F015_CELULAR				NVARCHAR(50)
+    /*
+		*	Id maestro detalle tercero en entidades dinamicas tercero:
+		*		10	->	Residente
+		*		11	->	No residente
+	*/
+	DECLARE @id_maestro_detalle_tercero_cop   NVARCHAR(2) =   '10',
+            @id_maestro_detalle_tercero_usd   NVARCHAR(2) =   '11';
+
+	DECLARE @id_pais_defecto	NVARCHAR(3)	=	'',
+			@id_dpto_defecto	NVARCHAR(3)	=	'',
+			@id_ciudad_defecto	NVARCHAR(3)	=	'';
+	
+	/*
+		*	Definición de variables para la obtención de la ubicación desde Shopify
+		*		1 = Obtener la ubicación desde la sección Customer.Default_Address
+		*		2 = Obtener la ubicación desde la sección Billing_Address
+		*		3 = Obtener la ubicación desde la sección Shipping_Address
+		*		4 = Obtener la ubicación desde la sección Shipping_Address
+	*/
+	DECLARE @location_origin_data	INT	=	1;
+
+--->================================================================================================================<---
+
+	/*
+		*	Definición de la sección de terceros del conector
+	*/
+    DECLARE @Terceros TABLE (
+        F200_ID                 NVARCHAR(15),
+        F200_NIT                NVARCHAR(25),
+        F200_RAZON_SOCIAL       NVARCHAR(100),
+        F200_APELLIDO1          NVARCHAR(29),
+        F200_APELLIDO2          NVARCHAR(29),
+        F200_NOMBRES            NVARCHAR(40),
+        F200_NOMBRE_EST         NVARCHAR(50),
+        F015_CONTACTO           NVARCHAR(50),
+        F015_DIRECCION1         NVARCHAR(40),
+        F015_DIRECCION2         NVARCHAR(40),
+        F015_ID_PAIS            NVARCHAR(3),
+        F015_ID_DEPTO           NVARCHAR(2),
+        F015_ID_CIUDAD          NVARCHAR(3),
+        F015_TELEFONO           NVARCHAR(20),
+        F015_EMAIL              NVARCHAR(255),
+        F200_FECHA_NACIMIENTO   NVARCHAR(8),
+        F015_CELULAR            NVARCHAR(50)
+    );
+
+    /*
+		*	Definición de la sección de clientes del conector
+	*/
+    DECLARE @Clientes TABLE (
+        F201_ID_TERCERO             NVARCHAR(15),
+        F201_DESCRIPCION_SUCURSAL   NVARCHAR(40),
+        F201_ID_MONEDA              NVARCHAR(3),
+        F201_ID_TIPO_CLI            NVARCHAR(4),
+        F201_ID_LISTA_PRECIO        NVARCHAR(3),
+        F015_CONTACTO               NVARCHAR(50),
+        F015_DIRECCION1             NVARCHAR(40),
+        F015_DIRECCION2             NVARCHAR(40),
+        F015_ID_PAIS                NVARCHAR(3),
+        F015_ID_DEPTO               NVARCHAR(2),
+        F015_ID_CIUDAD              NVARCHAR(3),
+        F015_TELEFONO               NVARCHAR(20),
+        F015_EMAIL                  NVARCHAR(255),
+        F201_FECHA_INGRESO          NVARCHAR(8),
+        f015_celular                NVARCHAR(50)
+    );
+
+    /*
+		*	Definición de la sección de impuestos y retenciones del conector
+	*/
+	DECLARE @Imptos_y_Reten	TABLE (
+		F_ID_TERCERO		NVARCHAR(15),
+        F_ID_VALOR_TERCERO  NVARCHAR(2)
 	);
 
-	DECLARE @Cliente	TABLE (
-		F201_ID_TERCERO				NVARCHAR(15),
-	--	F201_ID_SUCURSAL			NVARCHAR(10),
-		F201_DESCRIPCION_SUCURSAL	NVARCHAR(40),
-		F201_ID_MONEDA				NVARCHAR(3),
-	--	F201_ID_COND_PAGO			NVARCHAR(5),
-		F201_ID_TIPO_CLI			NVARCHAR(4),
-		F201_ID_LISTA_PRECIO		NVARCHAR(3),
-		F201_ID_CO_FACTURA			NVARCHAR(3),
-		F015_CONTACTO				NVARCHAR(50),
-		F015_DIRECCION1				NVARCHAR(40),
-		F015_DIRECCION2				NVARCHAR(40),
-		F015_DIRECCION3				NVARCHAR(40),
-		F015_ID_PAIS				NVARCHAR(3),
-		F015_ID_DEPTO				NVARCHAR(2),
-		F015_ID_CIUDAD				NVARCHAR(3),
-		F015_TELEFONO				NVARCHAR(20),
-		F015_EMAIL					NVARCHAR(255),
-		F201_FECHA_INGRESO			NVARCHAR(8),
-		f015_celular				NVARCHAR(50)
+    /*
+		*	Definición de la sección de entidades dinamicas tercero del conector
+	*/
+	DECLARE @Ent_Dinamica_Tercero	TABLE (
+		f200_id					NVARCHAR(15),
+		f753_id_maestro_detalle	NVARCHAR(20)
 	);
-
-	DECLARE @Impuestos	TABLE	(
-		F_ID_TERCERO		NVARCHAR(20),
-		F_ID_SUCURSAL		NVARCHAR(10),
-        F_ID_VALOR_TERCERO  NVARCHAR(1)
-	);
+	
+--->================================================================================================================<---
 
 	DECLARE @ordenes TABLE (
-       id_orden    NVARCHAR(900),
-       orden_obj   NVARCHAR(MAX)
-   );
+		id_orden	NVARCHAR(20),
+		orden_obj	NVARCHAR(MAX)
+	);
 
-    INSERT INTO @ordenes
-	SELECT TOP 20
-        id_orden, 
-        orden_obj
+	/*
+		*	Obtener órdenes pendientes de procesamiento que se encuentran en estado 1 y 
+		*	tienen menos de 3 intentos de procesamiento
+	*/
+	INSERT INTO @ordenes (id_orden, orden_obj)
+	SELECT TOP (@batch_size)
+		id_orden, 
+		orden_obj
 	FROM ordenes 
 	WHERE 
-        id_estado =1 
-	    AND 
-        intentos<=3
+		id_estado	=	1
+		AND
+		intentos	<=	3;
 
-	SET @total = (SELECT COUNT(*) FROM @ordenes);
+--->================================================================================================================<---
+
+	/*
+		*	Definición de variables para el procesamiento de las órdenes
+	*/
+	DECLARE @order		NVARCHAR(30);
+	DECLARE @json		NVARCHAR(MAX)	= 	'';
+	DECLARE @total		INT	=	(SELECT COUNT(*) FROM @ordenes);	--	*	Total de órdenes a procesar
+	DECLARE @counter	INT	=	1;									--	*	Contador de órdenes procesadas
 
 	WHILE @counter <= @total
-	BEGIN 
-        BEGIN TRY
-        SET @json = (
-            SELECT 
-                orden_obj
-            FROM (
-                SELECT
-                    orden_obj, 
-                    ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS rn
-                FROM @ordenes
-            ) AS temp
-            WHERE
-                rn = @counter
-        );
+	BEGIN
+		BEGIN TRY
+			/*
+				*	Obtener el JSON de la orden actual
+			*/
+			SET @json	=	(
+				SELECT
+					orden_obj
+				FROM (
+					SELECT 
+						orden_obj, 
+						ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS rn
+					FROM @ordenes
+				) AS temp
+				WHERE
+					rn = @counter
+			);
+			
+			/*
+				*	Variables para almacenar los valores de país, departamento, ciudad, dirección 1 y dirección 2 desde el pedido de Shopify
+                *		@location_origin_data   =   1   --> Obtener la ubicación desde la sección Customer.Default_Address
+		        *		@location_origin_data   =   2   --> Obtener la ubicación desde la sección Billing_Address
+		        *		@location_origin_data   =   3   --> Obtener la ubicación desde la sección Shipping_Address
+			*/
+			DECLARE @base_path NVARCHAR(100) =
+    		CASE 
+    		    WHEN @location_origin_data = 1 THEN '$.customer.default_address'
+    		    WHEN @location_origin_data = 2 THEN '$.billing_address'
+    		    WHEN @location_origin_data = 3 THEN '$.shipping_address'
+    		    ELSE ''
+    		END;
 
-        SELECT TOP 1 
-            @paisSiesa      =   ISNULL(f013_id_pais,'169') ,
-            @dptoSiesa      =   ISNULL(f013_id_depto,'05') ,
-            @ciudadSiesa    =   ISNULL(f013_id,'001') 
-        FROM locaciones_erp 
-        WHERE 
-            -- dbo.fn_RemoveAccentMarks(
-                REPLACE(
-                    REPLACE(
-                        REPLACE(
-                            REPLACE(
-                                REPLACE(
-                                    REPLACE(
-                                        LOWER(f011_descripcion), 
-                                        'ü', 
-                                        'u'
-                                    ), 
-                                    'á', 
-                                    'a'
-                                ),
-                                'é',
-                                'e'
-                            ),
-                            'í',
-                            'i'
-                        ),
-                        'ó',
-                        'o'
-                    ),
-                    'ú',
-                    'u'
-                )
-            -- )
-            =
-            -- dbo.fn_RemoveAccentMarks(
-                REPLACE(
-                    REPLACE(
-                        REPLACE(
-                            REPLACE(
-                                REPLACE(
-                                    REPLACE(
-                                        LOWER(JSON_VALUE(@json, '$.customer.default_address.country')), 
-                                        'ü', 
-                                        'u'
-                                    ), 
-                                    'á', 
-                                    'a'
-                                ),
-                                'é',
-                                'e'
-                            ),
-                            'í',
-                            'i'
-                        ),
-                        'ó',
-                        'o'
-                    ),
-                    'ú',
-                    'u'
-                )
-            -- )
-            and   
-            -- dbo.fn_RemoveAccentMarks(
-                REPLACE(
-                    REPLACE(
-                        REPLACE(
-                            REPLACE(
-                                REPLACE(
-                                    REPLACE(
-                                        LOWER(f012_descripcion), 
-                                        'ü', 
-                                        'u'
-                                    ), 
-                                    'á', 
-                                    'a'
-                                ),
-                                'é',
-                                'e'
-                            ),
-                            'í',
-                            'i'
-                        ),
-                        'ó',
-                        'o'
-                    ),
-                    'ú',
-                    'u'
-                )
-            -- )
-            =
-            -- dbo.fn_RemoveAccentMarks(
-                REPLACE(
-                    REPLACE(
-                        REPLACE(
-                            REPLACE(
-                                REPLACE(
-                                    REPLACE(
-                                        LOWER(JSON_VALUE(@json, '$.customer.default_address.province')), 
-                                        'ü', 
-                                        'u'
-                                    ), 
-                                    'á', 
-                                    'a'
-                                ),
-                                'é',
-                                'e'
-                            ),
-                            'í',
-                            'i'
-                        ),
-                        'ó',
-                        'o'
-                    ),
-                    'ú',
-                    'u'
-                )
-            -- )
-            and   
-            -- dbo.fn_RemoveAccentMarks(
-                REPLACE(
-                    REPLACE(
-                        REPLACE(
-                            REPLACE(
-                                REPLACE(
-                                    REPLACE(
-                                        LOWER(f013_descripcion), 
-                                        'ü', 
-                                        'u'
-                                    ), 
-                                    'á', 
-                                    'a'
-                                ),
-                                'é',
-                                'e'
-                            ),
-                            'í',
-                            'i'
-                        ),
-                        'ó',
-                        'o'
-                    ),
-                    'ú',
-                    'u'
-                )
-            -- )
-            =
-            -- dbo.fn_RemoveAccentMarks(
-                REPLACE(
-                    REPLACE(
-                        REPLACE(
-                            REPLACE(
-                                REPLACE(
-                                    REPLACE(
-                                        LOWER(JSON_VALUE(@json, '$.customer.default_address.city')), 
-                                        'ü', 
-                                        'u'
-                                    ), 
-                                    'á', 
-                                    'a'
-                                ),
-                                'é',
-                                'e'
-                            ),
-                            'í',
-                            'i'
-                        ),
-                        'ó',
-                        'o'
-                    ),
-                    'ú',
-                    'u'
-                );
-            -- ) ;
-        
-        SET @order=JSON_VALUE(@json, '$.name');
+			DECLARE @pais_shopify NVARCHAR(100) =
+				dbo.fn_RemoveAccentMarks(
+					LOWER(
+						JSON_VALUE(@json, @base_path + '.country')
+					)
+				);
 
-        DECLARE @F200_ID                NVARCHAR(40)    =   
-            ISNULL(
-                JSON_VALUE(@json, '$.billing_address.company'),
-                JSON_VALUE(@json, '$.customer.default_address.company')
-            );
-        
-        SET @F200_ID    =   
-            ISNULL(
-                NULLIF(
-                    NULLIF(
-                        TRIM(
-                            REPLACE(
-                                TRANSLATE(
-                                    UPPER(@F200_ID), 
-                                    'AÁÄBCDEÉËFGHIÍÏJKLMNÑOÓÖPQRSTUÚÜVWXYZ,.@', 
-                                    '****************************************'
-                                ), 
-                                '*', 
-                                ''
-                            )
-                        ), 
-                        ''
-                    ),
-                    '-'
-                ),
-                @id_consumidor_final
-            );
+			DECLARE @dpto_shopify NVARCHAR(100) =
+				dbo.fn_RemoveAccentMarks(
+					LOWER(
+						JSON_VALUE(@json, @base_path + '.province')
+					)
+				);
 
-        DECLARE @F200_RAZON_SOCIAL      NVARCHAR(100)   =   
-            UPPER(
-                ISNULL(
-                    JSON_VALUE(@json, '$.billing_address.name'),
-                    JSON_VALUE(@json, '$.customer.default_address.name')
-                )
-            );
-        DECLARE @F015_DIRECCION1        NVARCHAR(40)    =   
-            UPPER(
-                ISNULL(
-                    JSON_VALUE(@json, '$.billing_address.address1'),
-                    JSON_VALUE(@json, '$.customer.default_address.address1')
-                )
-            );
-        DECLARE @F015_DIRECCION2        NVARCHAR(40)    =   
-            UPPER(
-                ISNULL(
-                    JSON_VALUE(@json, '$.billing_address.address2'),
-                    JSON_VALUE(@json, '$.customer.default_address.address2')
-                )
-            );
-        DECLARE @F015_DIRECCION3        NVARCHAR(40)    =   
-            UPPER(
-                ISNULL(
-                    JSON_VALUE(@json, '$.billing_address.address3'),
-                    JSON_VALUE(@json, '$.customer.default_address.address3')
-                )
-            );
-        DECLARE @F015_TELEFONO          NVARCHAR(20)    =   
-            LEFT(
-                REPLACE(
-                    REPLACE(
-                        TRIM(
-                            REPLACE(
-                                JSON_VALUE(@json, '$.customer.default_address.phone'),
-                                '+57',
-                                ''
-                            )
-                        ), 
-                        ' ', 
-                        ''
-                    ),
-                    '-',
-                    ''
-                ),
-                20
-            );
-            DECLARE @F015_EMAIL             NVARCHAR(255)   =   LEFT(JSON_VALUE(@json, '$.customer.email'), 255);
-            DECLARE @FECHA                  NVARCHAR(8)    =   
-                REPLACE(
-                    CONVERT(
-                        VARCHAR(10), 
-                        CAST(JSON_VALUE(@json, '$.customer.created_at') AS DATE)
-                    ), 
-                    '-', 
-                    ''
-                );
-            DECLARE @F201_ID_MONEDA         NVARCHAR(3)     =   UPPER(JSON_VALUE(@json, '$.presentment_currency'));
-            DECLARE @F201_ID_TIPO_CLI       NVARCHAR(4)     = 
-                CASE
-                    WHEN    @F201_ID_MONEDA =   'COP' 
-                        THEN @id_tipo_cliente_nacional 
-                    WHEN    @F201_ID_MONEDA =   'USD'
-                        THEN @id_tipo_cliente_extranjero 
-                    ELSE @id_tipo_cliente_nacional 
-                END;
+			DECLARE @ciudad_shopify NVARCHAR(100) =
+				dbo.fn_RemoveAccentMarks(
+					LOWER(
+						JSON_VALUE(@json, @base_path + '.city')
+					)
+				);
 
-            /*
-                *   TERCERO
-            */
-            INSERT INTO @Tercero
-            SELECT 
-                F200_ID                 =   LEFT(@F200_ID, 15),
-                F200_NIT                =	LEFT(@F200_ID, 25),
-                F200_ID_TIPO_IDENT      =   @F200_ID_TIPO_IDENT,
-                F200_IND_TIPO_TERCERO   =   @F200_IND_TIPO_TERCERO,
-                F200_RAZON_SOCIAL       =   LEFT(@F200_RAZON_SOCIAL, 100),
-                F200_APELLIDO1          =   
-                    LEFT(
-                        LEFT(
-                            UPPER(
-                                TRIM(JSON_VALUE(@json, '$.customer.default_address.last_name'))
-                            ), 
-                            CHARINDEX(
-                                ' ', 
-                                UPPER(
-                                    TRIM(JSON_VALUE(@json, '$.customer.default_address.last_name'))
-                                ) + ' '
-                            ) - 1
-                        ), 
-                        29
-                    ),
-                F200_APELLIDO2          =     
-                    LEFT(
-                        LTRIM(
-                            SUBSTRING(
-                                UPPER(
-                                    TRIM(JSON_VALUE(@json, '$.customer.default_address.last_name'))
-                                ),
-                                CHARINDEX(
-                                    ' ', 
-                                    UPPER(
-                                        TRIM(JSON_VALUE(@json, '$.customer.default_address.last_name'))
-                                    ) + ' '
-                                ), 
-                                LEN(
-                                    UPPER(
-                                        TRIM(JSON_VALUE(@json, '$.customer.default_address.last_name'))
-                                    )
-                                ) - CHARINDEX(
-                                    ' ', 
-                                    UPPER(
-                                        TRIM(JSON_VALUE(@json, '$.customer.default_address.last_name'))
-                                    )
-                                ) + 1
-                            )
-                        ),
-                        29
-                    ),
-                F200_NOMBRES            =
-                    LEFT(
-                        UPPER(
-                            ISNULL(
-                                JSON_VALUE(@json, '$.customer.default_address.first_name'),
-                                JSON_VALUE(@json, '$.customer.default_address.first_name')
-                            )
-                        ), 
-                        40
-                    ),
-                F200_NOMBRE_EST         =   LEFT(@F200_RAZON_SOCIAL, 50),
-                F015_CONTACTO           =   LEFT(@F200_RAZON_SOCIAL, 50),
-                F015_DIRECCION1         =   @F015_DIRECCION1,
-                F015_DIRECCION2         =   @F015_DIRECCION2,
-                F015_DIRECCION3         =   @F015_DIRECCION3,
-                F015_ID_PAIS            =   @paisSiesa,
-                F015_ID_DEPTO           =   @dptoSiesa,
-                F015_ID_CIUDAD          =   @ciudadSiesa,
-                F015_TELEFONO           =   @F015_TELEFONO,
-                F015_EMAIL              =   @F015_EMAIL,
-                F200_FECHA_NACIMIENTO   =   LEFT(@FECHA, 8),
-                F015_CELULAR            =   LEFT(@F015_TELEFONO, 20)
+			DECLARE @direccion_1_shopify NVARCHAR(255) =
+				UPPER(
+					JSON_VALUE(@json, @base_path + '.address1')
+				);
 
-            /*
-                *   CLIENTE
-            */
-            INSERT INTO @Cliente
-            SELECT 
-                F201_ID_TERCERO             =   LEFT(@F200_ID, 15),
-            --  F201_ID_SUCURSAL            =   @Id_sucursal,
-                F201_DESCRIPCION_SUCURSAL   =   LEFT(@F200_RAZON_SOCIAL, 40),
-                F201_ID_MONEDA              =   @F201_ID_MONEDA,
-            --  F201_ID_COND_PAGO           =   @id_cond_pago,
-                F201_ID_TIPO_CLI            =   @F201_ID_TIPO_CLI,
-                F201_ID_LISTA_PRECIO        =
-                    CASE
-                        WHEN    @F201_ID_MONEDA =   'COP' 
-                            THEN    @id_lista_precios_cop 
-                        WHEN    @F201_ID_MONEDA =   'USD'
-                            THEN    @id_lista_precios_usd 
-                        ELSE    @id_lista_precios_cop 
-                    END,
-                F201_ID_CO_FACTURA          =   @id_co,
-                F015_CONTACTO               =   LEFT(@F200_RAZON_SOCIAL, 50),
-                F015_DIRECCION1             =   LEFT(@F015_DIRECCION1, 40),
-                F015_DIRECCION2             =   LEFT(@F015_DIRECCION2, 40),
-                F015_DIRECCION3             =   LEFT(@F015_DIRECCION3, 40),
-                F015_ID_PAIS                =	@paisSiesa,
-                F015_ID_DEPTO               =	@dptoSiesa,
-                F015_ID_CIUDAD              =	@ciudadSiesa,
-                F015_TELEFONO               =	@F015_TELEFONO,
-                F015_EMAIL                  =   @F015_EMAIL,
-                F201_FECHA_INGRESO          =   LEFT(@FECHA, 8),
-                f015_celular                =   LEFT(@F015_TELEFONO, 50)  
+			DECLARE @direccion_2_shopify NVARCHAR(255) =
+				UPPER(
+					JSON_VALUE(@json, @base_path + '.address2')
+				);
 
-            /*
-                *   IMPUESTOS
-            */
-            INSERT INTO @Impuestos
+			DECLARE @id_pais_erp	NVARCHAR(3);
+			DECLARE @id_dptos_erp	NVARCHAR(2);
+			DECLARE @id_ciudad_erp	NVARCHAR(3);
+
             SELECT
-                F_ID_TERCERO        =   LEFT(@F200_ID, 15),
-                F_ID_SUCURSAL       =   @Id_sucursal,
-                F_ID_VALOR_TERCERO  =
-                    CASE 
-                        WHEN    @F201_ID_MONEDA =   'COP'
-                            THEN    '1' 
-                        ELSE    '0'
+				@id_pais_erp	=	id_pais_erp,
+				@id_dptos_erp	=	id_dptos_erp,
+				@id_ciudad_erp	=	id_ciudad_erp
+            FROM dbo.fn_GetLocationIds(
+                @pais_shopify,      -- país
+                @dpto_shopify,      -- departamento
+                @ciudad_shopify,    -- ciudad
+                @id_pais_defecto,   -- id_pais_defecto
+                @id_dpto_defecto,   -- id_depto_defecto
+                @id_ciudad_defecto  -- id_ciudad_defecto
+            );
+
+			SET @order	=	JSON_VALUE(@json, '$.name');	--	*	Obtener el número de la ordenn
+
+			DECLARE @id_cliente NVARCHAR(100) =
+				REPLACE(
+					CASE @client_origin_data
+						WHEN 1 
+							THEN 
+								NULLIF(
+									TRIM(
+										JSON_VALUE(@json, @path_customer + '.company')
+									)
+									, ''
+								)
+						WHEN 2 
+							THEN 
+								NULLIF(
+									TRIM(
+										JSON_VALUE(@json, @path_billing  + '.company')
+									)
+									, ''
+								)
+						WHEN 3 
+							THEN 
+								COALESCE(
+									NULLIF(
+										TRIM(
+											JSON_VALUE(@json, @path_customer + '.company')
+										)
+										, ''
+									),
+									NULLIF(
+										TRIM(
+											JSON_VALUE(@json, @path_billing  + '.company')
+										)
+										, ''
+									)
+								)
+						WHEN 4 
+							THEN 
+								COALESCE(
+									NULLIF(
+										TRIM(
+											JSON_VALUE(@json, @path_billing  + '.company')
+										)
+										, ''
+									),
+									NULLIF(
+										TRIM(
+											JSON_VALUE(@json, @path_customer + '.company')
+										)
+										, ''
+									)
+								)
+					END,
+					'.',
+					''
+				);
+			
+			IF ISNULL(@id_cliente, '') = ''
+			BEGIN
+				UPDATE ordenes
+				SET 
+					intentos	=
+						CASE
+							WHEN @process_client_without_id = 0 
+								THEN 
+									intentos + 1 
+							ELSE 0 
+						END,
+					id_estado	=
+						CASE 
+							WHEN @process_client_without_id = 1 
+								THEN 2 
+							ELSE id_estado 
+						END
+				WHERE
+					id_orden	=	@order;
+
+				SET @counter = @counter + 1;
+				CONTINUE;
+			END;
+
+			DECLARE @razon_social NVARCHAR(100) =
+				UPPER(
+					COALESCE(
+						CASE 
+							WHEN @client_origin_data IN (1,3) 
+								THEN 
+									JSON_VALUE(@json, @path_customer + '.name') 
+						END,
+						CASE 
+							WHEN @client_origin_data IN (2,4) 
+								THEN 
+									JSON_VALUE(@json, @path_billing  + '.name') 
+						END,
+						''
+					)
+				);
+
+			DECLARE @nombre_cliente NVARCHAR(40) =
+				UPPER(
+					COALESCE(
+						CASE 
+							WHEN @client_origin_data IN (1,3) 
+								THEN 
+									JSON_VALUE(@json, @path_customer + '.first_name') 
+						END,
+						CASE 
+							WHEN @client_origin_data IN (2,4) 
+								THEN 
+									JSON_VALUE(@json, @path_billing  + '.first_name') 
+						END,
+						''
+					)
+				);
+
+			DECLARE @apellidos_cliente NVARCHAR(80) =
+				UPPER(
+					COALESCE(
+						CASE 
+							WHEN @client_origin_data IN (1,3) 
+								THEN 
+									JSON_VALUE(@json, @path_customer + '.last_name') 
+						END,
+						CASE 
+							WHEN @client_origin_data IN (2,4) 
+								THEN 
+									JSON_VALUE(@json, @path_billing  + '.last_name') 
+						END,
+						''
+					)
+				);
+
+			DECLARE @apellido_1_cliente	NVARCHAR(80) = 
+				LEFT(
+					@apellidos_cliente, 
+					CHARINDEX(
+						' ', 
+						@apellidos_cliente + ' '
+					) - 1
+				);
+
+			DECLARE @apellido_2_cliente NVARCHAR(80) =
+				LTRIM(
+					SUBSTRING(
+						@apellidos_cliente,
+						CHARINDEX(' ', @apellidos_cliente + ' '),
+						LEN(@apellidos_cliente)
+					)
+				);
+
+			DECLARE @telefono_cliente	NVARCHAR(50)	=	
+				REPLACE(
+					JSON_VALUE(@json, @path_customer + '.phone'),
+					'+57',
+					''
+				);
+
+			DECLARE @email_cliente		NVARCHAR(255)	=	JSON_VALUE(@json, '$.customer.email');
+
+			DECLARE @fecha_creacion		NVARCHAR(8)	=	
+				REPLACE(
+					CONVERT(
+						VARCHAR(10), 
+						CAST(
+							JSON_VALUE(@json, '$.customer.created_at') AS DATE
+						)
+					), 
+					'-', 
+					''
+				);
+
+                DECLARE @id_moneda  NVARCHAR(3) =
+                    UPPER(
+                        JSON_VALUE(@json,'$.presentment_currency')
+                    );
+                    
+                DECLARE @id_tipo_cli    NVARCHAR(4) =
+                    CASE
+                        WHEN @id_moneda =   'USD'
+                            THEN @id_tipo_cliente_extranjero
+                        ELSE @id_tipo_cliente_nacional
                     END;
 
-            IF (@F200_ID != @id_consumidor_final)
-            BEGIN
-                INSERT INTO @final(
-                    idDocumento,
-                    descripcion,
-                    indicaParalelismo,
-                    idOrden,
-                    json
-                )
-                SELECT
-                    @idDocumento,
-                    @descripcionConector,
-                    @indicaParalelismo,
-                    idOrden             =   @order,
-                    (
-                        SELECT
-                            [Terceros] = (
-                                SELECT *
-                                FROM @tercero
-                                FOR JSON PATH,
-                                INCLUDE_NULL_VALUES
-                            ),
-                            [Clientes] = (
-                                SELECT *
-                                FROM @cliente
-                                FOR JSON PATH,
-                                INCLUDE_NULL_VALUES
-                            ),
-                            [Imptos y Reten] = (
-                                SELECT * 
-                                FROM @impuestos
-                                FOR JSON PATH,
-                                INCLUDE_NULL_VALUES
-                            )
-                        FOR JSON PATH,
-                        WITHOUT_ARRAY_WRAPPER,
-                        INCLUDE_NULL_VALUES
-                    );
-            END
-            ELSE
-            BEGIN
-                UPDATE ordenes
-                SET
-                    id_estado   =   2
-                WHERE
-                    id_orden    =   @order
-            END
+                DECLARE @id_lista_precios NVARCHAR(3) = 
+                    CASE
+                        WHEN @id_moneda =   'USD'
+                            THEN @id_lista_precios_usd
+                        ELSE @id_lista_precios_cop
+                    END;
+                
+                DECLARE @f_id_valor_tercero NVARCHAR(2) =
+                    CASE
+                        WHEN @id_moneda =   'USD'
+                            THEN @f_id_valor_tercero_usd
+                        ELSE @f_id_valor_tercero_cop
+                    END;
+                
+                DECLARE @id_maestro_detalle_tercero NVARCHAR(2) =
+                    CASE
+                        WHEN @id_moneda =   'USD'
+                            THEN @id_maestro_detalle_tercero_usd
+                        ELSE @id_maestro_detalle_tercero_cop
+                    END;
 
-            DELETE @Tercero;
-            DELETE @Cliente;
-            DELETE @Impuestos;
-            SET @counter = @counter + 1;
-        END TRY
-        BEGIN CATCH
+        -- ===============================
+        -- INSERT TERCERO
+        -- ===============================
+        INSERT INTO @Terceros
+        (
+            F200_ID,
+            F200_NIT,
+            F200_RAZON_SOCIAL,
+            F200_APELLIDO1,
+            F200_APELLIDO2,
+            F200_NOMBRES,
+            F200_NOMBRE_EST,
+            F015_CONTACTO,
+            F015_DIRECCION1,
+            F015_DIRECCION2,
+            F015_ID_PAIS,
+            F015_ID_DEPTO,
+            F015_ID_CIUDAD,
+            F015_TELEFONO,
+            F015_EMAIL,
+            F200_FECHA_NACIMIENTO,
+            F015_CELULAR
+        )
+        SELECT
+            F200_ID                 =   @id_cliente,
+            F200_NIT                =   @id_cliente,
+            F200_RAZON_SOCIAL       =   @razon_social,
+            F200_APELLIDO1          =   @apellido_1_cliente,
+            F200_APELLIDO2          =   @apellido_2_cliente,
+            F200_NOMBRES            =   @nombre_cliente,
+            F200_NOMBRE_EST         =   @razon_social,
+            F015_CONTACTO           =   @razon_social,
+            F015_DIRECCION1         =   @direccion_1_shopify,
+            F015_DIRECCION2         =   @direccion_2_shopify,
+            F015_ID_PAIS            =   @id_pais_erp,
+            F015_ID_DEPTO           =   @id_dptos_erp,
+            F015_ID_CIUDAD          =   @id_ciudad_erp,
+            F015_TELEFONO           =   @telefono_cliente,
+            F015_EMAIL              =   @email_cliente,
+            F200_FECHA_NACIMIENTO   =   @fecha_creacion,
+            F015_CELULAR            =   @telefono_cliente;
+
+			/*
+				*	Sección de clientes del conector
+			*/
+			INSERT INTO @Clientes
+			(
+				F015_CONTACTO,
+				F201_ID_LISTA_PRECIO,
+				F015_DIRECCION1,
+				F015_DIRECCION2,
+				F015_ID_PAIS,
+				F015_ID_DEPTO,
+				F015_ID_CIUDAD,
+				F015_TELEFONO,
+				F015_EMAIL,
+				F201_FECHA_INGRESO,
+				f015_celular,
+				F201_ID_TERCERO,
+				F201_DESCRIPCION_SUCURSAL,
+				F201_ID_MONEDA,
+				F201_ID_TIPO_CLI
+			)
+			SELECT
+				F015_CONTACTO				=	LEFT(@razon_social, 50),
+				F201_ID_LISTA_PRECIO		=	@id_lista_precios,
+				F015_DIRECCION1				=	LEFT(@direccion_1_shopify, 40),
+				F015_DIRECCION2				=	LEFT(@direccion_2_shopify, 40),
+				F015_ID_PAIS				=	LEFT(@id_pais_erp, 3),
+				F015_ID_DEPTO				=	LEFT(@id_dptos_erp, 2),
+				F015_ID_CIUDAD				=	LEFT(@id_ciudad_erp, 3),
+				F015_TELEFONO				=	LEFT(@telefono_cliente, 20),
+				F015_EMAIL					=	LEFT(@email_cliente, 255),
+				F201_FECHA_INGRESO			=	@fecha_creacion,
+				f015_celular				=	LEFT(@telefono_cliente, 50),
+				F201_ID_TERCERO				=	LEFT(@id_cliente, 15),
+				F201_DESCRIPCION_SUCURSAL	=	LEFT(@razon_social, 40),
+				F201_ID_MONEDA				=	@id_moneda,
+				F201_ID_TIPO_CLI			=	@id_tipo_cli;
+
+            /*
+				*	Sección de clientes del Impuestos y retenciones
+				*	-	F_TIPO_REG
+				*			46	->	Impuestos cliente
+				*			47	->	Retención cliente
+				*			49	->	Impuestos proveedor
+				*			50	->	Retención proveedor
+			*/
+			INSERT INTO @Imptos_y_Reten
+			(
+				F_ID_TERCERO,
+                F_ID_VALOR_TERCERO
+			)
+			SELECT
+				F_ID_TERCERO	    =	LEFT(@id_cliente, 15),
+                F_ID_VALOR_TERCERO  =   @f_id_valor_tercero;
+
+            /*
+				*	Sección de Entidades dinamicas del tercero del conector
+			*/
+            INSERT INTO @Ent_Dinamica_Tercero
+            (
+                f200_id,
+                f753_id_maestro_detalle
+            )
             SELECT
-                indicaError         =   CAST(1 AS BIT), 
-                descripcionError    =   CONCAT('Error: ', ERROR_MESSAGE())
-            DELETE @Tercero;
-            DELETE @Cliente;
-            DELETE @Impuestos;
-            SET @counter = @counter + 1;
-        END CATCH
-    END
-    SELECT * from @final AS final_json; 
+                f200_id                 =   LEFT(@id_cliente, 15),
+                f753_id_maestro_detalle =   @id_maestro_detalle_tercero;
+            
+            INSERT INTO @final(
+				idDocumento,
+				descripcion,
+				indicaParalelismo,
+				idOrden,
+				json
+			)
+			SELECT 
+				@idDocumento,
+				@descripcionConector,
+				@indicaParalelismo,
+				@order as idOrden,
+				(
+					SELECT
+						[Terceros] = (
+							SELECT *
+							FROM @Terceros
+							FOR JSON PATH,
+							INCLUDE_NULL_VALUES
+						)
+						,
+						[Clientes] = (
+							SELECT *
+							FROM @Clientes
+							FOR JSON PATH,
+							INCLUDE_NULL_VALUES
+						),
+						[Imptos y Reten] = (
+							SELECT *
+							FROM @Imptos_y_Reten
+      						FOR JSON PATH,
+							INCLUDE_NULL_VALUES
+    					),
+						[Ent Dinamica Tercero] = (
+							SELECT *
+							FROM @Ent_Dinamica_Tercero
+      						FOR JSON PATH,
+							INCLUDE_NULL_VALUES
+    					)
+					FOR JSON PATH,
+					WITHOUT_ARRAY_WRAPPER,
+					INCLUDE_NULL_VALUES
+				);
+
+			SET @counter = @counter + 1;
+			DELETE @Terceros;
+			DELETE @Clientes;
+			DELETE @Imptos_y_Reten;
+			DELETE @Ent_Dinamica_Tercero;
+        END TRY
+		BEGIN CATCH
+			--	*	Registrar el error en la orden y continuar con la siguiente
+			UPDATE ordenes
+			SET 
+				intentos	=	intentos + 1
+			WHERE 
+				id_orden	=	@order;
+		END CATCH;
+
+		SET @counter = @counter + 1;
+		DELETE @Terceros;
+		DELETE @Clientes;
+		DELETE @Imptos_y_Reten;
+		DELETE @Ent_Dinamica_Tercero;
+	END
+
+    SELECT * 
+    FROM    @final AS final_json;
 END TRY
 BEGIN CATCH
-    SELECT
+    SELECT 
         indicaError         =   CAST(1 AS BIT), 
-        descripcionError    =   CONCAT('Error: ', ERROR_MESSAGE())
-END CATCH
+        descripcionError    =   CONCAT('Error: ', ERROR_MESSAGE()),
+        ErrorNumber         =   ERROR_NUMBER(),
+        ErrorSeverity       =   ERROR_SEVERITY(),
+        ErrorState          =   ERROR_STATE(),
+        ErrorProcedure      =   ERROR_PROCEDURE(),
+        ErrorLine           =   ERROR_LINE(),
+        ErrorMessage        =   ERROR_MESSAGE();
+END CATCH;
