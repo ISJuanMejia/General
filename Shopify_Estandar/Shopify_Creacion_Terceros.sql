@@ -17,7 +17,7 @@ BEGIN TRY
 		*		Descripción: Nombre del conector
 		*		Indica paralelismo: 1 = Sí, 0 = No, dependiendo si el conector soporta múltiples hilos de ejecución.
 	*/
-	DECLARE	@idDocumento			INT			=	'229584',
+	DECLARE	@idDocumento			INT			=	'000000',
 			@descripcionConector	VARCHAR(50)	=	'Ecommerce_Terceros_Clientes',
 			@indicaParalelismo		BIT			=	1;
 
@@ -36,6 +36,9 @@ BEGIN TRY
 		*		4 = Desde la sección Billing Address y si no existe, desde Customer
 	*/
 	DECLARE @client_origin_data	INT	=	4;
+
+	DECLARE @path_customer	NVARCHAR(100)	=	'$.customer.default_address';
+	DECLARE @path_billing	NVARCHAR(100)	=	'$.billing_address';
 
 	/*
 		*	Procesar clientes/terceros sin ID
@@ -59,6 +62,69 @@ BEGIN TRY
 	*/
 	DECLARE @ind_tipo_tercero_defecto	NVARCHAR(1)	=	'1';
 
+	/*
+		TODO -> Configurar según el caso, validar según reglas del cliente, eliminar comentarios cuando finalice configuración
+		*	Id tipo de cliente:
+		*		1	->	id_tipo_cliente 1
+		*		2	->	id_tipo_cliente 2
+		*		3	->	id_tipo_cliente 3
+		*		4	->	id_tipo_cliente 4
+	*/
+	DECLARE @id_tipo_cliente_1	NVARCHAR(4) =   '1', -- TODO -> Configurar según el caso, validar según reglas del cliente
+            @id_tipo_cliente_2	NVARCHAR(4) =   '2', -- TODO -> Configurar según el caso, validar según reglas del cliente
+            @id_tipo_cliente_3	NVARCHAR(4) =   '3', -- TODO -> Configurar según el caso, validar según reglas del cliente
+            @id_tipo_cliente_4	NVARCHAR(4) =   '4'; -- TODO -> Configurar según el caso, validar según reglas del cliente
+    
+    /*
+		TODO -> Configurar según el caso, validar según reglas del cliente, eliminar comentarios cuando finalice configuración
+		*	Id lista de precios:
+		*		1	->	Lista de precios 1
+		*		2	->	Lista de precios 2
+		*		3	->	Lista de precios 3
+		*		4	->	Lista de precios 4
+	*/
+	DECLARE @id_lista_precios_1	NVARCHAR(3) =   '1', -- TODO -> Configurar según el caso, validar según reglas del cliente
+            @id_lista_precios_2	NVARCHAR(3) =   '2'; -- TODO -> Configurar según el caso, validar según reglas del cliente
+
+    /*
+		TODO -> Configurar según el caso, validar según reglas del cliente, eliminar comentarios cuando finalice configuración
+		*	Id valor tercero en impuestos y retenciones:
+		*		1	->	Id valor tercero 1
+		*		2	->	Id valor tercero 2
+		*		3	->	Id valor tercero 3
+		*		4	->	Id valor tercero 4
+	*/
+	DECLARE @f_id_valor_tercero_1   NVARCHAR(2) =   '1', -- TODO -> Configurar según el caso, validar según reglas del cliente
+            @f_id_valor_tercero_2   NVARCHAR(2) =   '2', -- TODO -> Configurar según el caso, validar según reglas del cliente
+            @f_id_valor_tercero_3   NVARCHAR(2) =   '3', -- TODO -> Configurar según el caso, validar según reglas del cliente
+            @f_id_valor_tercero_4   NVARCHAR(2) =   '4'; -- TODO -> Configurar según el caso, validar según reglas del cliente
+
+    /*
+		TODO -> Configurar según el caso, validar según reglas del cliente, eliminar comentarios cuando finalice configuración
+		*	Id maestro detalle tercero en entidades dinamicas tercero:
+		*		1	->	Id maestro detalle tercero 1
+		*		2	->	Id maestro detalle tercero 2
+		*		3	->	Id maestro detalle tercero 3
+		*		4	->	Id maestro detalle tercero 4
+	*/
+	DECLARE @id_maestro_detalle_tercero_1	NVARCHAR(2) =   '1', -- TODO -> Configurar según el caso, validar según reglas del cliente
+            @id_maestro_detalle_tercero_2	NVARCHAR(2) =   '2', -- TODO -> Configurar según el caso, validar según reglas del cliente
+            @id_maestro_detalle_tercero_3	NVARCHAR(2) =   '3', -- TODO -> Configurar según el caso, validar según reglas del cliente
+            @id_maestro_detalle_tercero_4	NVARCHAR(2) =   '4'; -- TODO -> Configurar según el caso, validar según reglas del cliente
+
+	/*
+		TODO -> Configurar según el caso, validar según reglas del cliente, eliminar comentarios cuando finalice configuración
+		*	Id CIIU del tercero:
+		*		1	->	Id CIIU 1
+		*		2	->	Id CIIU 2
+		*		3	->	Id CIIU 3
+		*		4	->	Id CIIU 4
+	*/
+	DECLARE @id_ciiu_1	VARCHAR(4)	=	'1', -- TODO -> Configurar según el caso, validar según reglas del cliente
+			@id_ciiu_2	VARCHAR(4)	=	'2', -- TODO -> Configurar según el caso, validar según reglas del cliente
+			@id_ciiu_3	VARCHAR(4)	=	'3', -- TODO -> Configurar según el caso, validar según reglas del cliente
+			@id_ciiu_4	VARCHAR(4)	=	'4'; -- TODO -> Configurar según el caso, validar según reglas del cliente
+
 	DECLARE @id_pais_defecto	NVARCHAR(3)	=	'',
 			@id_dpto_defecto	NVARCHAR(3)	=	'',
 			@id_ciudad_defecto	NVARCHAR(3)	=	'';
@@ -70,11 +136,6 @@ BEGIN TRY
 		*		3 = Obtener la ubicación desde la sección Shipping_Address
 	*/
 	DECLARE @location_origin_data	INT	=	1;
-
-	/*
-		*	Id CIIU del tercero
-	*/
-	DECLARE @id_ciiu	VARCHAR(4)	=	'1111';
 
 --->================================================================================================================<---
 
@@ -108,7 +169,7 @@ BEGIN TRY
 	/*
 		*	Definición de la sección de clientes del conector
 	*/
-	DECLARE @cliente	TABLE (
+	DECLARE @clientes	TABLE (
 		F015_CONTACTO				NVARCHAR(50),
 		F201_ID_LISTA_PRECIO		NVARCHAR(3),
 		F201_ID_CO_FACTURA			NVARCHAR(3),
@@ -239,60 +300,44 @@ BEGIN TRY
 		        *		@location_origin_data   =   2   --> Obtener la ubicación desde la sección Billing_Address
 		        *		@location_origin_data   =   3   --> Obtener la ubicación desde la sección Shipping_Address
 			*/
-			DECLARE @pais_shopify	NVARCHAR(100)	=	
-				CASE
-					WHEN @location_origin_data = 1 
-						THEN dbo.fn_RemoveAccentMarks(LOWER(JSON_VALUE(@json, '$.customer.default_address.country')))
-					WHEN @location_origin_data = 2 
-						THEN dbo.fn_RemoveAccentMarks(LOWER(JSON_VALUE(@json, '$.billing_address.country')))
-					WHEN @location_origin_data = 3 
-						THEN dbo.fn_RemoveAccentMarks(LOWER(JSON_VALUE(@json, '$.shipping_address.country')))
-					ELSE ''
-				END;
+			DECLARE @base_path NVARCHAR(100) =
+    		CASE 
+    		    WHEN @location_origin_data = 1 THEN '$.customer.default_address'
+    		    WHEN @location_origin_data = 2 THEN '$.billing_address'
+    		    WHEN @location_origin_data = 3 THEN '$.shipping_address'
+    		    ELSE ''
+    		END;
 
-			DECLARE @dpto_shopify	NVARCHAR(100)	=	
-				CASE
-					WHEN @location_origin_data = 1 
-						THEN dbo.fn_RemoveAccentMarks(LOWER(JSON_VALUE(@json, '$.customer.default_address.province')))
-					WHEN @location_origin_data = 2 
-						THEN dbo.fn_RemoveAccentMarks(LOWER(JSON_VALUE(@json, '$.billing_address.province')))
-					WHEN @location_origin_data = 3 
-						THEN dbo.fn_RemoveAccentMarks(LOWER(JSON_VALUE(@json, '$.shipping_address.province')))
-					ELSE ''
-				END;
+			DECLARE @pais_shopify NVARCHAR(100) =
+				dbo.fn_RemoveAccentMarks(
+					LOWER(
+						JSON_VALUE(@json, @base_path + '.country')
+					)
+				);
 
-			DECLARE @ciudad_shopify	NVARCHAR(100)	=	
-				CASE
-					WHEN @location_origin_data = 1 
-						THEN dbo.fn_RemoveAccentMarks(LOWER(JSON_VALUE(@json, '$.customer.default_address.city')))
-					WHEN @location_origin_data = 2 
-						THEN dbo.fn_RemoveAccentMarks(LOWER(JSON_VALUE(@json, '$.billing_address.city')))
-					WHEN @location_origin_data = 3 
-						THEN dbo.fn_RemoveAccentMarks(LOWER(JSON_VALUE(@json, '$.shipping_address.city')))
-					ELSE ''
-				END;
+			DECLARE @dpto_shopify NVARCHAR(100) =
+				dbo.fn_RemoveAccentMarks(
+					LOWER(
+						JSON_VALUE(@json, @base_path + '.province')
+					)
+				);
 
-			DECLARE @direccion_1_shopify	NVARCHAR(255)	=	
-				CASE
-					WHEN @location_origin_data = 1 
-						THEN UPPER(JSON_VALUE(@json, '$.customer.default_address.address1'))
-					WHEN @location_origin_data = 2 
-						THEN UPPER(JSON_VALUE(@json, '$.billing_address.address1'))
-					WHEN @location_origin_data = 3 
-						THEN UPPER(JSON_VALUE(@json, '$.shipping_address.address1'))
-					ELSE ''
-				END;
+			DECLARE @ciudad_shopify NVARCHAR(100) =
+				dbo.fn_RemoveAccentMarks(
+					LOWER(
+						JSON_VALUE(@json, @base_path + '.city')
+					)
+				);
 
-			DECLARE @direccion_2_shopify	NVARCHAR(255)	=	
-				CASE
-					WHEN @location_origin_data = 1 
-						THEN UPPER(JSON_VALUE(@json, '$.customer.default_address.address2'))
-					WHEN @location_origin_data = 2 
-						THEN UPPER(JSON_VALUE(@json, '$.billing_address.address2'))
-					WHEN @location_origin_data = 3 
-						THEN UPPER(JSON_VALUE(@json, '$.shipping_address.address2'))
-					ELSE ''
-				END;
+			DECLARE @direccion_1_shopify NVARCHAR(255) =
+				UPPER(
+					JSON_VALUE(@json, @base_path + '.address1')
+				);
+
+			DECLARE @direccion_2_shopify NVARCHAR(255) =
+				UPPER(
+					JSON_VALUE(@json, @base_path + '.address2')
+				);
 
 			DECLARE @id_pais_erp	NVARCHAR(3);
 			DECLARE @id_dptos_erp	NVARCHAR(2);
@@ -313,248 +358,154 @@ BEGIN TRY
 
 			SET @order	=	JSON_VALUE(@json, '$.name');	--	*	Obtener el número de la orden
 
-			DECLARE @id_cliente		NVARCHAR(100)	=	
-				CASE
-					WHEN @client_origin_data	=	1	--	*	Desde la sección Customer
+			DECLARE @id_cliente NVARCHAR(100) =
+				CASE @client_origin_data
+					WHEN 1 
 						THEN 
 							NULLIF(
 								TRIM(
-									JSON_VALUE(@json, '$.customer.default_address.company')
-								), 
-								''
+									JSON_VALUE(@json, @path_customer + '.company')
+								)
+								, ''
 							)
-					WHEN @client_origin_data	=	2	--	*	Desde la sección Billing Address
+					WHEN 2 
 						THEN 
 							NULLIF(
 								TRIM(
-									JSON_VALUE(@json, '$.billing_address.company')
-								), 
-								''
+									JSON_VALUE(@json, @path_billing  + '.company')
+								)
+								, ''
 							)
-					WHEN @client_origin_data	=	3	--	*	Desde la sección Customer o Billing Address
-						THEN
-							ISNULL(
+					WHEN 3 
+						THEN 
+							COALESCE(
 								NULLIF(
 									TRIM(
-										JSON_VALUE(@json, '$.customer.default_address.company')
-									),
-									''
-								), 
-								JSON_VALUE(@json, '$.billing_address.company')
-							)
-					WHEN @client_origin_data	=	4	--	*	Desde la sección Billing Address o Customer
-						THEN
-							ISNULL(
+										JSON_VALUE(@json, @path_customer + '.company')
+									)
+									, ''
+								),
 								NULLIF(
 									TRIM(
-										JSON_VALUE(@json, '$.billing_address.company')
-									),
-									''
-								), 
-								JSON_VALUE(@json, '$.customer.default_address.company')
+										JSON_VALUE(@json, @path_billing  + '.company')
+									)
+									, ''
+								)
 							)
-					ELSE NULL
+					WHEN 4 
+						THEN 
+							COALESCE(
+								NULLIF(
+									TRIM(
+										JSON_VALUE(@json, @path_billing  + '.company')
+									)
+									, ''
+								),
+								NULLIF(
+									TRIM(
+										JSON_VALUE(@json, @path_customer + '.company')
+									)
+									, ''
+								)
+							)
 				END;
 			
-			IF (@id_cliente IS NULL OR @id_cliente = '')
+			IF ISNULL(@id_cliente, '') = ''
 			BEGIN
-				IF (@process_client_without_id = 0)
-				BEGIN
-					--	*	Incrementar el contador de intentos y continuar con la siguiente orden
-					UPDATE ordenes
-					SET 
-						intentos	=	intentos + 1
-					WHERE 
-						id_orden	=	@order;
+				UPDATE ordenes
+				SET 
+					intentos	=
+						CASE
+							WHEN @process_client_without_id = 0 
+								THEN 
+									intentos + 1 
+							ELSE 0 
+						END,
+					id_estado	=
+						CASE 
+							WHEN @process_client_without_id = 1 
+								THEN 2 
+							ELSE id_estado 
+						END
+				WHERE
+					id_orden	=	@order;
 
-					CONTINUE;
-				END
-				ELSE
-				BEGIN
-					--	*	Cambiar el estado de la orden a 2 (Pendiente de Revisión) y colocar intentos a 0
-					UPDATE ordenes
-					SET 
-						id_estado	=	2,
-						intentos	=	0
-					WHERE 
-						id_orden	=	@order;
-					
-					CONTINUE;
-				END
+				SET @counter = @counter + 1;
+				CONTINUE;
 			END;
 
-			DECLARE @razon_social		NVARCHAR(100)	=	
-				CASE
-					WHEN @client_origin_data	=	1	--	*	Desde la sección Customer
-						THEN 
-							ISNULL(
-								UPPER(
-									JSON_VALUE(@json, '$.customer.default_address.name')
-								), 
-								''
-							)
-					WHEN @client_origin_data	=	2	--	*	Desde la sección Billing Address
-						THEN
-							ISNULL(
-								UPPER(
-									JSON_VALUE(@json, '$.billing_address.name')
-								), 
-								''
-							)
-					WHEN @client_origin_data	=	3	--	*	Desde la sección Customer o Billing Address
-						THEN 
-							ISNULL(
-								UPPER(
-									JSON_VALUE(@json, '$.customer.default_address.name')
-								),
-								ISNULL(
-									UPPER(
-										JSON_VALUE(@json, '$.billing_address.name')
-									), 
-									''
-								)
-							)
-					WHEN @client_origin_data	=	4	--	*	Desde la sección Billing Address o Customer
-						THEN 
-							ISNULL(
-								UPPER(
-									JSON_VALUE(@json, '$.billing_address.name')
-								),
-								ISNULL(
-									UPPER(
-										JSON_VALUE(@json, '$.customer.default_address.name')
-									), 
-									''
-								)
-							)
-					ELSE ''
-				END;
+			DECLARE @razon_social NVARCHAR(100) =
+				UPPER(
+					COALESCE(
+						CASE 
+							WHEN @client_origin_data IN (1,3) 
+								THEN 
+									JSON_VALUE(@json, @path_customer + '.name') 
+						END,
+						CASE 
+							WHEN @client_origin_data IN (2,4) 
+								THEN 
+									JSON_VALUE(@json, @path_billing  + '.name') 
+						END,
+						''
+					)
+				);
 
-			DECLARE @nombre_cliente		NVARCHAR(40)	=
-				CASE
-					WHEN @client_origin_data	=	1	--	*	Desde la sección Customer
-						THEN 
-							ISNULL(
-								UPPER(
-									JSON_VALUE(@json, '$.customer.default_address.first_name')
-								), 
-								''
-							)
-					WHEN @client_origin_data	=	2	--	*	Desde la sección Billing Address
-						THEN 
-							ISNULL(
-								UPPER(
-									JSON_VALUE(@json, '$.billing_address.first_name')
-								), 
-								''
-							)
-					WHEN @client_origin_data	=	3	--	*	Desde la sección Customer o Billing Address
-						THEN 
-							ISNULL(
-								UPPER(
-									JSON_VALUE(@json, '$.customer.default_address.first_name')
-								),
-								ISNULL(
-									UPPER(
-										JSON_VALUE(@json, '$.billing_address.first_name')
-									), 
-									''
-								)
-							)
-					WHEN @client_origin_data	=	4	--	*	Desde la sección Billing Address o Customer
-						THEN 
-							ISNULL(
-								UPPER(
-									JSON_VALUE(@json, '$.billing_address.first_name')
-								),
-								ISNULL(
-									UPPER(
-										JSON_VALUE(@json, '$.customer.default_address.first_name')
-									), 
-									''
-								)
-							)
-					ELSE ''
-				END;
+			DECLARE @nombre_cliente NVARCHAR(40) =
+				UPPER(
+					COALESCE(
+						CASE 
+							WHEN @client_origin_data IN (1,3) 
+								THEN 
+									JSON_VALUE(@json, @path_customer + '.first_name') 
+						END,
+						CASE 
+							WHEN @client_origin_data IN (2,4) 
+								THEN 
+									JSON_VALUE(@json, @path_billing  + '.first_name') 
+						END,
+						''
+					)
+				);
 
-			DECLARE @apellidos_cliente	NVARCHAR(80)	=	
-				CASE
-					WHEN @client_origin_data	=	1	--	*	Desde la sección Customer
-						THEN 
-							ISNULL(
-								UPPER(
-									JSON_VALUE(@json, '$.customer.default_address.last_name')
-								), 
-								''
-							)
-					WHEN @client_origin_data	=	2	--	*	Desde la sección Billing Address
-						THEN
-							ISNULL(
-								UPPER(
-									JSON_VALUE(@json, '$.billing_address.last_name')
-								), 
-								''
-							)
-					WHEN @client_origin_data	=	3	--	*	Desde la sección Customer o Billing Address
-						THEN 
-							ISNULL(
-								UPPER(
-									JSON_VALUE(@json, '$.customer.default_address.last_name')
-								),
-								ISNULL(
-									UPPER(
-										JSON_VALUE(@json, '$.billing_address.last_name')
-									), 
-									''
-								)
-							)
-					WHEN @client_origin_data	=	4	--	*	Desde la sección Billing Address o Customer
-						THEN 
-							ISNULL(
-								UPPER(
-									JSON_VALUE(@json, '$.billing_address.last_name')
-								),
-								ISNULL(
-									UPPER(
-										JSON_VALUE(@json, '$.customer.default_address.last_name')
-									), 
-									''
-								)
-							)
-					ELSE ''
-				END;
+			DECLARE @apellidos_cliente NVARCHAR(80) =
+				UPPER(
+					COALESCE(
+						CASE 
+							WHEN @client_origin_data IN (1,3) 
+								THEN 
+									JSON_VALUE(@json, @path_customer + '.last_name') 
+						END,
+						CASE 
+							WHEN @client_origin_data IN (2,4) 
+								THEN 
+									JSON_VALUE(@json, @path_billing  + '.last_name') 
+						END,
+						''
+					)
+				);
 
 			DECLARE @apellido_1_cliente	NVARCHAR(80) = 
 				LEFT(
-					UPPER(
-						TRIM(@apellidos_cliente)
-					), 
+					@apellidos_cliente, 
 					CHARINDEX(
 						' ', 
-						UPPER(@apellidos_cliente) + ' '
+						@apellidos_cliente + ' '
 					) - 1
 				);
 
-			DECLARE @apellido_2_cliente	NVARCHAR(80)	=
+			DECLARE @apellido_2_cliente NVARCHAR(80) =
 				LTRIM(
 					SUBSTRING(
-						UPPER(@apellidos_cliente),
-						CHARINDEX(
-							' ', 
-							UPPER(@apellidos_cliente) + ' '
-						), 
-						LEN(
-							UPPER(@apellidos_cliente)
-						) - CHARINDEX(
-							' ', 
-							UPPER(@apellidos_cliente)
-						) + 1
+						@apellidos_cliente,
+						CHARINDEX(' ', @apellidos_cliente + ' '),
+						LEN(@apellidos_cliente)
 					)
 				);
 
 			DECLARE @telefono_cliente	NVARCHAR(50)	=	
 				REPLACE(
-					JSON_VALUE(@json, '$.customer.default_address.phone'),
+					JSON_VALUE(@json, @path_customer + '.phone'),
 					'+57',
 					''
 				);
@@ -626,7 +577,7 @@ BEGIN TRY
 			/*
 				*	Sección de clientes del conector
 			*/
-			INSERT INTO @cliente
+			INSERT INTO @clientes
 			(
 				F015_CONTACTO,
 				F201_ID_LISTA_PRECIO,
@@ -655,7 +606,7 @@ BEGIN TRY
 				F201_NOTAS
 			)
 			SELECT
-				F015_CONTACTO				=	LEFT('', 50),
+				F015_CONTACTO				=	LEFT(@razon_social, 50),
 				F201_ID_LISTA_PRECIO		=	'',
 				F201_ID_CO_FACTURA			=	'',
 				F015_DIRECCION1				=	LEFT(@direccion_1_shopify, 40),
@@ -732,9 +683,9 @@ BEGIN TRY
 							INCLUDE_NULL_VALUES
 						)
 						,
-						[Cliente] = (
+						[Clientes] = (
 							SELECT *
-							FROM @cliente
+							FROM @clientes
 							FOR JSON PATH,
 							INCLUDE_NULL_VALUES
 						)						,
@@ -769,7 +720,10 @@ BEGIN TRY
 					INCLUDE_NULL_VALUES
 				);
 
-
+			SET @counter = @counter + 1;
+			DELETE @terceros;
+			DELETE @clientes;
+			DELETE @Imptos_y_Reten;
 		END TRY
 		BEGIN CATCH
 			--	*	Registrar el error en la orden y continuar con la siguiente
@@ -782,6 +736,8 @@ BEGIN TRY
 
 		SET @counter = @counter + 1;
 		DELETE @terceros;
+		DELETE @clientes;
+		DELETE @Imptos_y_Reten;
 	END
 
     SELECT * 

@@ -56,7 +56,22 @@ BEGIN
                 AND @ciudad_shopify LIKE '%cartagena%'
             )
             OR
-            -- Caso 4: Caso general
+            -- Caso 4: México – CDMX
+            (
+                dbo.fn_RemoveAccentMarks(LOWER(@pais_shopify)) = 'mexico'
+                AND 
+                dbo.fn_RemoveAccentMarks(LOWER(@dpto_shopify)) = 'ciudad de mexico'
+                AND 
+                dbo.fn_RemoveAccentMarks(LOWER(@ciudad_shopify)) IN ('cdmx', 'ciudad de mexico')
+                AND 
+                dbo.fn_RemoveAccentMarks(LOWER(f011_descripcion)) = 'mexico'
+                AND 
+                dbo.fn_RemoveAccentMarks(LOWER(f012_descripcion)) = 'ciudad de mexico'
+                AND 
+                dbo.fn_RemoveAccentMarks(LOWER(f013_descripcion)) = 'ciudad de mexico'
+            )
+            OR
+            -- Caso 5: Caso general
             (
                 dbo.fn_RemoveAccentMarks(LOWER(f012_descripcion)) = @dpto_shopify
                 AND
