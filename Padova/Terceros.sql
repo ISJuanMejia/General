@@ -190,7 +190,6 @@ BEGIN TRY
 		*		1 = Obtener la ubicación desde la sección Customer.Default_Address
 		*		2 = Obtener la ubicación desde la sección Billing_Address
 		*		3 = Obtener la ubicación desde la sección Shipping_Address
-		*		4 = Obtener la ubicación desde la sección Shipping_Address
 	*/
 	DECLARE @location_origin_data	INT	=	1;
 
@@ -271,7 +270,7 @@ BEGIN TRY
 	SELECT TOP (@batch_size)
 		id_orden, 
 		orden_obj
-	FROM ordenes 
+	FROM [shopify-colombia-padova].dbo.ordenes 
 	WHERE 
 		id_estado	=	1
 		AND
@@ -359,7 +358,7 @@ BEGIN TRY
 				@id_pais_erp	=	id_pais_erp,
 				@id_dptos_erp	=	id_dptos_erp,
 				@id_ciudad_erp	=	id_ciudad_erp
-            FROM dbo.fn_GetLocationIds(
+            FROM [shopify-colombia-padova].dbo.fn_GetLocationIds(
                 @pais_shopify,      -- país
                 @dpto_shopify,      -- departamento
                 @ciudad_shopify,    -- ciudad
@@ -428,7 +427,7 @@ BEGIN TRY
 			
 			IF ISNULL(@id_cliente, '') = ''
 			BEGIN
-				UPDATE ordenes
+				UPDATE [shopify-colombia-padova].dbo.ordenes
 				SET 
 					intentos	=
 						CASE
@@ -540,80 +539,80 @@ BEGIN TRY
 					''
 				);
 
-                DECLARE @id_moneda  NVARCHAR(3) =
-                    UPPER(
-                        JSON_VALUE(@json,'$.presentment_currency')
-                    );
-                    
-                DECLARE @id_tipo_cli    NVARCHAR(4) =
-                    CASE
-                        WHEN @id_moneda =   'USD'
-                            THEN @id_tipo_cliente_extranjero
-                        ELSE @id_tipo_cliente_nacional
-                    END;
-
-                DECLARE @id_lista_precios NVARCHAR(3) = 
-                    CASE
-                        WHEN @id_moneda =   'USD'
-                            THEN @id_lista_precios_usd
-                        ELSE @id_lista_precios_cop
-                    END;
+            DECLARE @id_moneda  NVARCHAR(3) =
+                UPPER(
+                    JSON_VALUE(@json,'$.presentment_currency')
+                );
                 
-                DECLARE @f_id_valor_tercero NVARCHAR(2) =
-                    CASE
-                        WHEN @id_moneda =   'USD'
-                            THEN @f_id_valor_tercero_usd
-                        ELSE @f_id_valor_tercero_cop
-                    END;
-                
-                DECLARE @id_maestro_detalle_tercero NVARCHAR(2) =
-                    CASE
-                        WHEN @id_moneda =   'USD'
-                            THEN @id_maestro_detalle_tercero_usd
-                        ELSE @id_maestro_detalle_tercero_cop
-                    END;
+            DECLARE @id_tipo_cli    NVARCHAR(4) =
+                CASE
+                    WHEN @id_moneda =   'USD'
+                        THEN @id_tipo_cliente_extranjero
+                    ELSE @id_tipo_cliente_nacional
+                END;
 
-        -- ===============================
-        -- INSERT TERCERO
-        -- ===============================
-        INSERT INTO @Terceros
-        (
-            F200_ID,
-            F200_NIT,
-            F200_RAZON_SOCIAL,
-            F200_APELLIDO1,
-            F200_APELLIDO2,
-            F200_NOMBRES,
-            F200_NOMBRE_EST,
-            F015_CONTACTO,
-            F015_DIRECCION1,
-            F015_DIRECCION2,
-            F015_ID_PAIS,
-            F015_ID_DEPTO,
-            F015_ID_CIUDAD,
-            F015_TELEFONO,
-            F015_EMAIL,
-            F200_FECHA_NACIMIENTO,
-            F015_CELULAR
-        )
-        SELECT
-            F200_ID                 =   @id_cliente,
-            F200_NIT                =   @id_cliente,
-            F200_RAZON_SOCIAL       =   @razon_social,
-            F200_APELLIDO1          =   @apellido_1_cliente,
-            F200_APELLIDO2          =   @apellido_2_cliente,
-            F200_NOMBRES            =   @nombre_cliente,
-            F200_NOMBRE_EST         =   @razon_social,
-            F015_CONTACTO           =   @razon_social,
-            F015_DIRECCION1         =   @direccion_1_shopify,
-            F015_DIRECCION2         =   @direccion_2_shopify,
-            F015_ID_PAIS            =   @id_pais_erp,
-            F015_ID_DEPTO           =   @id_dptos_erp,
-            F015_ID_CIUDAD          =   @id_ciudad_erp,
-            F015_TELEFONO           =   @telefono_cliente,
-            F015_EMAIL              =   @email_cliente,
-            F200_FECHA_NACIMIENTO   =   @fecha_creacion,
-            F015_CELULAR            =   @telefono_cliente;
+            DECLARE @id_lista_precios NVARCHAR(3) = 
+                CASE
+                    WHEN @id_moneda =   'USD'
+                        THEN @id_lista_precios_usd
+                    ELSE @id_lista_precios_cop
+                END;
+            
+            DECLARE @f_id_valor_tercero NVARCHAR(2) =
+                CASE
+                    WHEN @id_moneda =   'USD'
+                        THEN @f_id_valor_tercero_usd
+                    ELSE @f_id_valor_tercero_cop
+                END;
+            
+            DECLARE @id_maestro_detalle_tercero NVARCHAR(2) =
+                CASE
+                    WHEN @id_moneda =   'USD'
+                        THEN @id_maestro_detalle_tercero_usd
+                    ELSE @id_maestro_detalle_tercero_cop
+                END;
+
+			-- ===============================
+			-- INSERT TERCERO
+			-- ===============================
+			INSERT INTO @Terceros
+			(
+				F200_ID,
+				F200_NIT,
+				F200_RAZON_SOCIAL,
+				F200_APELLIDO1,
+				F200_APELLIDO2,
+				F200_NOMBRES,
+				F200_NOMBRE_EST,
+				F015_CONTACTO,
+				F015_DIRECCION1,
+				F015_DIRECCION2,
+				F015_ID_PAIS,
+				F015_ID_DEPTO,
+				F015_ID_CIUDAD,
+				F015_TELEFONO,
+				F015_EMAIL,
+				F200_FECHA_NACIMIENTO,
+				F015_CELULAR
+			)
+			SELECT
+				F200_ID                 =   @id_cliente,
+				F200_NIT                =   @id_cliente,
+				F200_RAZON_SOCIAL       =   @razon_social,
+				F200_APELLIDO1          =   @apellido_1_cliente,
+				F200_APELLIDO2          =   @apellido_2_cliente,
+				F200_NOMBRES            =   @nombre_cliente,
+				F200_NOMBRE_EST         =   @razon_social,
+				F015_CONTACTO           =   @razon_social,
+				F015_DIRECCION1         =   @direccion_1_shopify,
+				F015_DIRECCION2         =   @direccion_2_shopify,
+				F015_ID_PAIS            =   @id_pais_erp,
+				F015_ID_DEPTO           =   @id_dptos_erp,
+				F015_ID_CIUDAD          =   @id_ciudad_erp,
+				F015_TELEFONO           =   @telefono_cliente,
+				F015_EMAIL              =   @email_cliente,
+				F200_FECHA_NACIMIENTO   =   @fecha_creacion,
+				F015_CELULAR            =   @telefono_cliente;
 
 			/*
 				*	Sección de clientes del conector
@@ -734,7 +733,7 @@ BEGIN TRY
         END TRY
 		BEGIN CATCH
 			--	*	Registrar el error en la orden y continuar con la siguiente
-			UPDATE ordenes
+			UPDATE [shopify-colombia-padova].dbo.ordenes
 			SET 
 				intentos	=	intentos + 1
 			WHERE 
