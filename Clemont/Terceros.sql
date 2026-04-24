@@ -344,15 +344,45 @@ BEGIN TRY
 			DECLARE @razon_social NVARCHAR(100) =
 				UPPER(
 					COALESCE(
-						CASE 
-							WHEN @client_origin_data IN (1,3) 
+						CASE    @client_origin_data
+							WHEN    1 
 								THEN 
-									JSON_VALUE(@json, @path_customer + '.name') 
-						END,
-						CASE 
-							WHEN @client_origin_data IN (2,4) 
+									JSON_VALUE(@json, @path_customer + '.name')
+							WHEN    2
 								THEN 
-									JSON_VALUE(@json, @path_billing  + '.name') 
+									JSON_VALUE(@json, @path_billing  + '.name')
+                            WHEN    3 
+                                THEN 
+                                    COALESCE(
+                                        NULLIF(
+                                            TRIM(
+                                                JSON_VALUE(@json, @path_customer + '.name')
+                                            )
+                                            , ''
+                                        ),
+                                        NULLIF(
+                                            TRIM(
+                                                JSON_VALUE(@json, @path_billing  + '.name')
+                                            )
+                                            , ''
+                                        )
+                                    )
+                            WHEN    4 
+                                THEN 
+                                    COALESCE(
+                                        NULLIF(
+                                            TRIM(
+                                                JSON_VALUE(@json, @path_billing  + '.name')
+                                            )
+                                            , ''
+                                        ),
+                                        NULLIF(
+                                            TRIM(
+                                                JSON_VALUE(@json, @path_customer + '.name')
+                                            )
+                                            , ''
+                                        )
+                                    )
 						END,
 						''
 					)
@@ -361,15 +391,45 @@ BEGIN TRY
 			DECLARE @nombre_cliente NVARCHAR(40) =
 				UPPER(
 					COALESCE(
-						CASE 
-							WHEN @client_origin_data IN (1,3) 
+                        CASE    @client_origin_data
+							WHEN    1 
 								THEN 
-									JSON_VALUE(@json, @path_customer + '.first_name') 
-						END,
-						CASE 
-							WHEN @client_origin_data IN (2,4) 
+									JSON_VALUE(@json, @path_customer + '.first_name')
+							WHEN    2
 								THEN 
-									JSON_VALUE(@json, @path_billing  + '.first_name') 
+									JSON_VALUE(@json, @path_billing  + '.first_name')
+                            WHEN    3 
+                                THEN 
+                                    COALESCE(
+                                        NULLIF(
+                                            TRIM(
+                                                JSON_VALUE(@json, @path_customer + '.first_name')
+                                            )
+                                            , ''
+                                        ),
+                                        NULLIF(
+                                            TRIM(
+                                                JSON_VALUE(@json, @path_billing  + '.first_name')
+                                            )
+                                            , ''
+                                        )
+                                    )
+                            WHEN    4 
+                                THEN 
+                                    COALESCE(
+                                        NULLIF(
+                                            TRIM(
+                                                JSON_VALUE(@json, @path_billing  + '.first_name')
+                                            )
+                                            , ''
+                                        ),
+                                        NULLIF(
+                                            TRIM(
+                                                JSON_VALUE(@json, @path_customer + '.first_name')
+                                            )
+                                            , ''
+                                        )
+                                    )
 						END,
 						''
 					)
@@ -378,15 +438,45 @@ BEGIN TRY
 			DECLARE @apellidos_cliente NVARCHAR(80) =
 				UPPER(
 					COALESCE(
-						CASE 
-							WHEN @client_origin_data IN (1,3) 
+                        CASE    @client_origin_data
+							WHEN    1 
 								THEN 
-									JSON_VALUE(@json, @path_customer + '.last_name') 
-						END,
-						CASE 
-							WHEN @client_origin_data IN (2,4) 
+									JSON_VALUE(@json, @path_customer + '.last_name')
+							WHEN    2
 								THEN 
-									JSON_VALUE(@json, @path_billing  + '.last_name') 
+									JSON_VALUE(@json, @path_billing  + '.last_name')
+                            WHEN    3 
+                                THEN 
+                                    COALESCE(
+                                        NULLIF(
+                                            TRIM(
+                                                JSON_VALUE(@json, @path_customer + '.last_name')
+                                            )
+                                            , ''
+                                        ),
+                                        NULLIF(
+                                            TRIM(
+                                                JSON_VALUE(@json, @path_billing  + '.last_name')
+                                            )
+                                            , ''
+                                        )
+                                    )
+                            WHEN    4 
+                                THEN 
+                                    COALESCE(
+                                        NULLIF(
+                                            TRIM(
+                                                JSON_VALUE(@json, @path_billing  + '.last_name')
+                                            )
+                                            , ''
+                                        ),
+                                        NULLIF(
+                                            TRIM(
+                                                JSON_VALUE(@json, @path_customer + '.last_name')
+                                            )
+                                            , ''
+                                        )
+                                    )
 						END,
 						''
 					)

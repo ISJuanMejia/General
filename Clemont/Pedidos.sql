@@ -206,7 +206,7 @@ BEGIN TRY
                 f430_num_docto_referencia   =   id_orden
                 OR
                 f430_referencia =   id_orden
-	WHERE 
+	WHERE
 		id_estado	=	2
 		AND
 		intentos	<=	@max_intentos
@@ -498,7 +498,7 @@ BEGIN TRY
  
             SET @id_tipo_cli_fact   =   ISNULL(@id_tipo_cli_fact, '');
  
-            DECLARE @consec_docto   VARCHAR(50) = JSON_VALUE(@json,'$.order_number');
+            DECLARE @consec_docto   VARCHAR(50) =   JSON_VALUE(@json,'$.order_number');
             DECLARE @id_fecha       VARCHAR(8)  =   FORMAT(CAST(JSON_VALUE(@json, '$.updated_at') AS DATE),'yyyyMMdd'),
                     @fecha_entrega  VARCHAR(10) =   FORMAT(DATEADD(DAY,1,CAST(JSON_VALUE(@json, '$.updated_at') AS DATE)),'yyyyMMdd');
  
@@ -668,7 +668,9 @@ BEGIN TRY
                     ON
                         LI.id   =   MPC.id
             WHERE
-                LI.discount_amount  IS NOT NULL;
+                LI.discount_amount  IS NOT NULL
+                AND 
+                CAST(LI.discount_amount AS DECIMAL) >   0;
  
             INSERT INTO @final
             (
