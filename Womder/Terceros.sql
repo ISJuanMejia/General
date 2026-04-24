@@ -52,7 +52,7 @@ BEGIN TRY
 		*		C	->	Cédula
 		*		N	->	NIT
 	*/
-	DECLARE @id_tipo_ident_defecto		NVARCHAR(1)	=	'C';
+	-- DECLARE @id_tipo_ident_defecto		NVARCHAR(1)	=	'C';
 
 	/*
 		*	Tipo de tercero:
@@ -70,10 +70,10 @@ BEGIN TRY
 		*		3	->	id_tipo_cliente 3
 		*		4	->	id_tipo_cliente 4
 	*/
-	DECLARE @id_tipo_cliente_1	NVARCHAR(4) =   '1', -- TODO -> Configurar según el caso, validar según reglas del cliente
-            @id_tipo_cliente_2	NVARCHAR(4) =   '2', -- TODO -> Configurar según el caso, validar según reglas del cliente
-            @id_tipo_cliente_3	NVARCHAR(4) =   '3', -- TODO -> Configurar según el caso, validar según reglas del cliente
-            @id_tipo_cliente_4	NVARCHAR(4) =   '4'; -- TODO -> Configurar según el caso, validar según reglas del cliente
+	-- DECLARE @id_tipo_cliente_1	NVARCHAR(4) =   '1', -- TODO -> Configurar según el caso, validar según reglas del cliente
+    --         @id_tipo_cliente_2	NVARCHAR(4) =   '2', -- TODO -> Configurar según el caso, validar según reglas del cliente
+    --         @id_tipo_cliente_3	NVARCHAR(4) =   '3', -- TODO -> Configurar según el caso, validar según reglas del cliente
+    --         @id_tipo_cliente_4	NVARCHAR(4) =   '4'; -- TODO -> Configurar según el caso, validar según reglas del cliente
     
     /*
 		TODO -> Configurar según el caso, validar según reglas del cliente, eliminar comentarios cuando finalice configuración
@@ -83,10 +83,10 @@ BEGIN TRY
 		*		3	->	Lista de precios 3
 		*		4	->	Lista de precios 4
 	*/
-	DECLARE @id_lista_precios_1	NVARCHAR(3) =   '1', -- TODO -> Configurar según el caso, validar según reglas del cliente
-            @id_lista_precios_2	NVARCHAR(3) =   '2', -- TODO -> Configurar según el caso, validar según reglas del cliente
-            @id_lista_precios_3	NVARCHAR(3) =   '3', -- TODO -> Configurar según el caso, validar según reglas del cliente
-            @id_lista_precios_4	NVARCHAR(3) =   '4'; -- TODO -> Configurar según el caso, validar según reglas del cliente
+	-- DECLARE @id_lista_precios_1	NVARCHAR(3) =   '1', -- TODO -> Configurar según el caso, validar según reglas del cliente
+    --         @id_lista_precios_2	NVARCHAR(3) =   '2', -- TODO -> Configurar según el caso, validar según reglas del cliente
+    --         @id_lista_precios_3	NVARCHAR(3) =   '3', -- TODO -> Configurar según el caso, validar según reglas del cliente
+    --         @id_lista_precios_4	NVARCHAR(3) =   '4'; -- TODO -> Configurar según el caso, validar según reglas del cliente
 
     /*
 		TODO -> Configurar según el caso, validar según reglas del cliente, eliminar comentarios cuando finalice configuración
@@ -100,32 +100,6 @@ BEGIN TRY
             @f_id_valor_tercero_2   NVARCHAR(2) =   '2', -- TODO -> Configurar según el caso, validar según reglas del cliente
             @f_id_valor_tercero_3   NVARCHAR(2) =   '3', -- TODO -> Configurar según el caso, validar según reglas del cliente
             @f_id_valor_tercero_4   NVARCHAR(2) =   '4'; -- TODO -> Configurar según el caso, validar según reglas del cliente
-
-    /*
-		TODO -> Configurar según el caso, validar según reglas del cliente, eliminar comentarios cuando finalice configuración
-		*	Id maestro detalle tercero en entidades dinamicas tercero:
-		*		1	->	Id maestro detalle tercero 1
-		*		2	->	Id maestro detalle tercero 2
-		*		3	->	Id maestro detalle tercero 3
-		*		4	->	Id maestro detalle tercero 4
-	*/
-	DECLARE @id_maestro_detalle_tercero_1	NVARCHAR(2) =   '1', -- TODO -> Configurar según el caso, validar según reglas del cliente
-            @id_maestro_detalle_tercero_2	NVARCHAR(2) =   '2', -- TODO -> Configurar según el caso, validar según reglas del cliente
-            @id_maestro_detalle_tercero_3	NVARCHAR(2) =   '3', -- TODO -> Configurar según el caso, validar según reglas del cliente
-            @id_maestro_detalle_tercero_4	NVARCHAR(2) =   '4'; -- TODO -> Configurar según el caso, validar según reglas del cliente
-
-	/*
-		TODO -> Configurar según el caso, validar según reglas del cliente, eliminar comentarios cuando finalice configuración
-		*	Id CIIU del tercero:
-		*		1	->	Id CIIU 1
-		*		2	->	Id CIIU 2
-		*		3	->	Id CIIU 3
-		*		4	->	Id CIIU 4
-	*/
-	DECLARE @id_ciiu_1	VARCHAR(4)	=	'1', -- TODO -> Configurar según el caso, validar según reglas del cliente
-			@id_ciiu_2	VARCHAR(4)	=	'2', -- TODO -> Configurar según el caso, validar según reglas del cliente
-			@id_ciiu_3	VARCHAR(4)	=	'3', -- TODO -> Configurar según el caso, validar según reglas del cliente
-			@id_ciiu_4	VARCHAR(4)	=	'4'; -- TODO -> Configurar según el caso, validar según reglas del cliente
 
 	DECLARE @id_pais_defecto	NVARCHAR(3)	=	'',
 			@id_dpto_defecto	NVARCHAR(3)	=	'',
@@ -203,36 +177,8 @@ BEGIN TRY
 		*	Definición de la sección de impuestos y retenciones del conector
 	*/
 	DECLARE @Imptos_y_Reten	TABLE (
-		F_TIPO_REG			NVARCHAR(4),
 		F_ID_TERCERO		NVARCHAR(15),
-		F_ID_SUCURSAL		NVARCHAR(3),
-		F_ID_CLASE			NVARCHAR(3),
-		F_ID_LLAVE			NVARCHAR(4)
-	);
-
-	/*
-		*	Definición de la sección de criterios clientes del conector
-	*/
-	DECLARE @Criterios_Clientes	TABLE (
-		F207_ID_TERCERO			NVARCHAR(15),
-		F207_ID_SUCURSAL		NVARCHAR(15),
-		F207_ID_PLAN_CRITERIOS	NVARCHAR(15),
-		F207_ID_CRITERIO_MAYOR	NVARCHAR(10)
-	);
-
-	/*
-		*	Definición de la sección de entidades dinamicas tercero del conector
-	*/
-	DECLARE @Ent_Dinamica_Tercero	TABLE (
-		f200_id					NVARCHAR(15),
-		f753_id_grupo_entidad	NVARCHAR(30),
-		f753_id_entidad			NVARCHAR(30),
-		f753_id_atributo		NVARCHAR(30),
-		f753_dato_numerico		NVARCHAR(28),
-		f753_dato_texto			NVARCHAR(2000),
-		f753_dato_fecha_hora	NVARCHAR(8),
-		f753_id_maestro			NVARCHAR(10),
-		f753_id_maestro_detalle	NVARCHAR(20)
+		F_ID_CLASE			NVARCHAR(3)
 	);
 
 	/*
@@ -562,7 +508,7 @@ BEGIN TRY
 			SELECT
 				F200_ID					=	LEFT(@id_cliente, 15),
 				F200_NIT				=	LEFT(@id_cliente, 25),
-				F200_ID_TIPO_IDENT		=	@id_tipo_ident_defecto,
+				-- F200_ID_TIPO_IDENT		=	@id_tipo_ident_defecto,
 				F200_IND_TIPO_TERCERO	=	@ind_tipo_tercero_defecto,
 				F200_RAZON_SOCIAL		=	LEFT(@razon_social, 100),
 				F200_APELLIDO1			=	LEFT(@apellido_1_cliente, 29),

@@ -132,7 +132,7 @@ BEGIN TRY
 		*		0 = No procesar clientes/terceros sin ID, incrementar el contador de intentos
 		*		1 = Procesar clientes/terceros sin ID, cambiar el estado de la orden de 1 a 2 y colocar intentos a 0
 	*/
-	DECLARE @process_client_without_id	BIT	=	0;
+	DECLARE @process_client_without_id	BIT	=	1;
 
 	/*
 		*	Tipo de identificación:
@@ -149,6 +149,14 @@ BEGIN TRY
 	*/
 	DECLARE @ind_tipo_tercero_defecto	NVARCHAR(1)	=	'1';
 
+    /*
+		*	Id sucursal:
+		*		001	->	Clientes nacionales
+		*		002	->	Clientes extranjeros
+	*/
+	DECLARE @id_sucursal_cop	NVARCHAR(3) =   '001',
+            @id_sucursal_usd	NVARCHAR(3) =   '002';
+    
     /*
 		*	Id tipo de cliente:
 		*		0001	->	Clientes nacionales
@@ -223,6 +231,7 @@ BEGIN TRY
 	*/
     DECLARE @Clientes TABLE (
         F201_ID_TERCERO             NVARCHAR(15),
+		F201_ID_SUCURSAL			NVARCHAR(3),
         F201_DESCRIPCION_SUCURSAL   NVARCHAR(40),
         F201_ID_MONEDA              NVARCHAR(3),
         F201_ID_TIPO_CLI            NVARCHAR(4),
@@ -244,6 +253,7 @@ BEGIN TRY
 	*/
 	DECLARE @Imptos_y_Reten	TABLE (
 		F_ID_TERCERO		NVARCHAR(15),
+		F_ID_SUCURSAL		NVARCHAR(3),
         F_ID_VALOR_TERCERO  NVARCHAR(2)
 	);
 
@@ -345,9 +355,40 @@ BEGIN TRY
 					JSON_VALUE(@json, @base_path + '.address1')
 				);
 
+			DECLARE @direccion_1_erp	NVARCHAR(400)	=
+				LEFT(@direccion_1_shopify, 40);
+
 			DECLARE @direccion_2_shopify NVARCHAR(255) =
 				UPPER(
 					JSON_VALUE(@json, @base_path + '.address2')
+				);
+
+			DECLARE @direccion_2_erp	NVARCHAR(400)	=
+				LEFT(	
+					CASE
+						WHEN
+							LTRIM(
+								SUBSTRING(
+									@direccion_1_shopify,
+									40,
+									LEN(
+										@direccion_1_shopify
+									)
+								)
+							) != ''
+							THEN
+							LTRIM(
+								SUBSTRING(
+									@direccion_1_shopify,
+									40,
+									LEN(
+										@direccion_1_shopify
+									)
+								)
+							) + ' - '
+						END +
+					@direccion_2_shopify,
+					40
 				);
 
 			DECLARE @id_pais_erp	NVARCHAR(3);
@@ -370,59 +411,62 @@ BEGIN TRY
 			SET @order	=	JSON_VALUE(@json, '$.name');	--	*	Obtener el número de la ordenn
 
 			DECLARE @id_cliente NVARCHAR(100) =
-				REPLACE(
-					CASE @client_origin_data
-						WHEN 1 
-							THEN 
-								NULLIF(
-									TRIM(
-										JSON_VALUE(@json, @path_customer + '.company')
-									)
-									, ''
-								)
-						WHEN 2 
-							THEN 
-								NULLIF(
-									TRIM(
-										JSON_VALUE(@json, @path_billing  + '.company')
-									)
-									, ''
-								)
-						WHEN 3 
-							THEN 
-								COALESCE(
-									NULLIF(
-										TRIM(
-											JSON_VALUE(@json, @path_customer + '.company')
-										)
-										, ''
-									),
-									NULLIF(
-										TRIM(
-											JSON_VALUE(@json, @path_billing  + '.company')
-										)
-										, ''
-									)
-								)
-						WHEN 4 
-							THEN 
-								COALESCE(
-									NULLIF(
-										TRIM(
-											JSON_VALUE(@json, @path_billing  + '.company')
-										)
-										, ''
-									),
+				LEFT(
+					REPLACE(
+						CASE @client_origin_data
+							WHEN 1 
+								THEN 
 									NULLIF(
 										TRIM(
 											JSON_VALUE(@json, @path_customer + '.company')
 										)
 										, ''
 									)
-								)
-					END,
-					'.',
-					''
+							WHEN 2 
+								THEN 
+									NULLIF(
+										TRIM(
+											JSON_VALUE(@json, @path_billing  + '.company')
+										)
+										, ''
+									)
+							WHEN 3 
+								THEN 
+									COALESCE(
+										NULLIF(
+											TRIM(
+												JSON_VALUE(@json, @path_customer + '.company')
+											)
+											, ''
+										),
+										NULLIF(
+											TRIM(
+												JSON_VALUE(@json, @path_billing  + '.company')
+											)
+											, ''
+										)
+									)
+							WHEN 4 
+								THEN 
+									COALESCE(
+										NULLIF(
+											TRIM(
+												JSON_VALUE(@json, @path_billing  + '.company')
+											)
+											, ''
+										),
+										NULLIF(
+											TRIM(
+												JSON_VALUE(@json, @path_customer + '.company')
+											)
+											, ''
+										)
+									)
+						END,
+						'.',
+						''
+					),
+					15
 				);
 			
 			IF ISNULL(@id_cliente, '') = ''
@@ -544,7 +588,15 @@ BEGIN TRY
                     JSON_VALUE(@json,'$.presentment_currency')
                 );
                 
-            DECLARE @id_tipo_cli    NVARCHAR(4) =
+            DECLARE @id_sucursal	NVARCHAR(3) =
+                CASE
+                    WHEN @id_moneda =   'USD'
+                        THEN @id_sucursal_usd
+                    ELSE @id_sucursal_cop
+                END;
+
+			
+			DECLARE @id_tipo_cli    NVARCHAR(4) =
                 CASE
                     WHEN @id_moneda =   'USD'
                         THEN @id_tipo_cliente_extranjero
@@ -604,8 +656,8 @@ BEGIN TRY
 				F200_NOMBRES            =   @nombre_cliente,
 				F200_NOMBRE_EST         =   @razon_social,
 				F015_CONTACTO           =   @razon_social,
-				F015_DIRECCION1         =   @direccion_1_shopify,
-				F015_DIRECCION2         =   @direccion_2_shopify,
+				F015_DIRECCION1         =   @direccion_1_erp,
+				F015_DIRECCION2         =   @direccion_2_erp,
 				F015_ID_PAIS            =   @id_pais_erp,
 				F015_ID_DEPTO           =   @id_dptos_erp,
 				F015_ID_CIUDAD          =   @id_ciudad_erp,
@@ -620,6 +672,7 @@ BEGIN TRY
 			INSERT INTO @Clientes
 			(
 				F015_CONTACTO,
+				F201_ID_SUCURSAL,
 				F201_ID_LISTA_PRECIO,
 				F015_DIRECCION1,
 				F015_DIRECCION2,
@@ -637,9 +690,10 @@ BEGIN TRY
 			)
 			SELECT
 				F015_CONTACTO				=	LEFT(@razon_social, 50),
+				F201_ID_SUCURSAL			=	@id_sucursal,
 				F201_ID_LISTA_PRECIO		=	@id_lista_precios,
-				F015_DIRECCION1				=	LEFT(@direccion_1_shopify, 40),
-				F015_DIRECCION2				=	LEFT(@direccion_2_shopify, 40),
+				F015_DIRECCION1				=	@direccion_1_erp,
+				F015_DIRECCION2				=	@direccion_2_erp,
 				F015_ID_PAIS				=	LEFT(@id_pais_erp, 3),
 				F015_ID_DEPTO				=	LEFT(@id_dptos_erp, 2),
 				F015_ID_CIUDAD				=	LEFT(@id_ciudad_erp, 3),
@@ -663,10 +717,12 @@ BEGIN TRY
 			INSERT INTO @Imptos_y_Reten
 			(
 				F_ID_TERCERO,
+				F_ID_SUCURSAL,
                 F_ID_VALOR_TERCERO
 			)
 			SELECT
 				F_ID_TERCERO	    =	LEFT(@id_cliente, 15),
+				F_ID_SUCURSAL		=	@id_sucursal,
                 F_ID_VALOR_TERCERO  =   @f_id_valor_tercero;
 
             /*
@@ -733,6 +789,17 @@ BEGIN TRY
         END TRY
 		BEGIN CATCH
 			--	*	Registrar el error en la orden y continuar con la siguiente
+
+			-- SELECT 
+			-- 	indicaError         =   CAST(1 AS BIT), 
+			-- 	descripcionError    =   CONCAT('Error: ', ERROR_MESSAGE()),
+			-- 	ErrorNumber         =   ERROR_NUMBER(),
+			-- 	ErrorSeverity       =   ERROR_SEVERITY(),
+			-- 	ErrorState          =   ERROR_STATE(),
+			-- 	ErrorProcedure      =   ERROR_PROCEDURE(),
+			-- 	ErrorLine           =   ERROR_LINE(),
+			-- 	ErrorMessage        =   ERROR_MESSAGE();
+
 			UPDATE [shopify-colombia-padova].dbo.ordenes
 			SET 
 				intentos	=	intentos + 1

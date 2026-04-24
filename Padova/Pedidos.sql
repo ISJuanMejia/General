@@ -26,7 +26,8 @@ BEGIN TRY
 	/*
 		*	Configuración de ejecución del script
 	*/
-	DECLARE @batch_size	INT	=   25;	--	*	Cuantas órdenes se traen por petición
+	DECLARE @batch_size    INT = 25;  -- Órdenes por petición
+    DECLARE @max_intentos  INT = 3;   -- Límite estricto de intentos (< no <=)
 
 	/*
 		*	Origen de los datos del cliente/tercero
@@ -41,17 +42,17 @@ BEGIN TRY
 	DECLARE @path_billing	NVARCHAR(100)	=	'$.billing_address';
 
     /*
-		*	Cliente ocasional cuando el cliente no tiene cédula
+		*	Id sucursal:
+		*		001	->	Clientes nacionales
+		*		002	->	Clientes extranjeros
 	*/
-    DECLARE @id_cliente_ocasional   NVARCHAR(20)    =   '';
+	DECLARE @id_sucursal_cop	NVARCHAR(3) =   '001',
+            @id_sucursal_usd	NVARCHAR(3) =   '002';
 
     /*
-        *   Vendedores
-    */
-    DECLARE @source_name_generico   NVARCHAR(50)    =   'GENERICO';
-    DECLARE @id_vendedor_generico   NVARCHAR(50)    =   'Generico';
-    DECLARE @source_name_leyva      NVARCHAR(50)    =   'LEYVA SOLANILLA JULIANA';
-    DECLARE @id_vendedor_leyva      NVARCHAR(50)    =   'JLS';
+		*	Cliente ocasional cuando el cliente no tiene cédula
+	*/
+    DECLARE @id_cliente_ocasional   NVARCHAR(20)    =   '222222222222';
 
     /*
         *   Referencia flete
@@ -155,7 +156,10 @@ BEGIN TRY
 	WHERE 
 		id_estado	=	2
 		AND
-		intentos	<=	3;
+		intentos	<=	@max_intentos
+        AND
+        fecha_creacion > '2026-04-17'
+    ORDER BY ID DESC;
 
 --->================================================================================================================<---
 
@@ -165,7 +169,9 @@ BEGIN TRY
     DECLARE @Pedidos TABLE (
         f430_id_fecha               NVARCHAR(8),
         f430_id_tercero_fact        NVARCHAR(15),
+        f430_id_sucursal_fact       NVARCHAR(3),
         f430_id_tercero_rem         NVARCHAR(15),
+        f430_id_sucursal_rem        NVARCHAR(3),
         f430_fecha_entrega          NVARCHAR(8),
         f430_num_dias_entrega       NVARCHAR(3),
         f430_num_docto_referencia   NVARCHAR(15),
@@ -239,74 +245,68 @@ BEGIN TRY
 					rn = @counter
 			);
             
-            SET @order	=	JSON_VALUE(@json, '$.name');	--	*	Obtener el número de la ordenn
+            SET @order	=	JSON_VALUE(@json, '$.name');	--	*	Obtener el número de la orden
 
 			DECLARE @id_cliente NVARCHAR(100) =
-				REPLACE(
-					CASE @client_origin_data
-						WHEN 1 
-							THEN 
-								NULLIF(
-									TRIM(
-										JSON_VALUE(@json, @path_customer + '.company')
-									)
-									, ''
-								)
-						WHEN 2 
-							THEN 
-								NULLIF(
-									TRIM(
-										JSON_VALUE(@json, @path_billing  + '.company')
-									)
-									, ''
-								)
-						WHEN 3 
-							THEN 
-								COALESCE(
-									NULLIF(
-										TRIM(
-											JSON_VALUE(@json, @path_customer + '.company')
-										)
-										, ''
-									),
-									NULLIF(
-										TRIM(
-											JSON_VALUE(@json, @path_billing  + '.company')
-										)
-										, ''
-									)
-								)
-						WHEN 4 
-							THEN 
-								COALESCE(
-									NULLIF(
-										TRIM(
-											JSON_VALUE(@json, @path_billing  + '.company')
-										)
-										, ''
-									),
-									NULLIF(
-										TRIM(
-											JSON_VALUE(@json, @path_customer + '.company')
-										)
-										, ''
-									)
-								)
-					END,
-					'.',
-					''
-				);
+				LEFT(
+                    REPLACE(
+				    	CASE @client_origin_data
+				    		WHEN 1 
+				    			THEN 
+				    				NULLIF(
+				    					TRIM(
+				    						JSON_VALUE(@json, @path_customer + '.company')
+				    					)
+				    					, ''
+				    				)
+				    		WHEN 2 
+				    			THEN 
+				    				NULLIF(
+				    					TRIM(
+				    						JSON_VALUE(@json, @path_billing  + '.company')
+				    					)
+				    					, ''
+				    				)
+				    		WHEN 3 
+				    			THEN 
+				    				COALESCE(
+				    					NULLIF(
+				    						TRIM(
+				    							JSON_VALUE(@json, @path_customer + '.company')
+				    						)
+				    						, ''
+				    					),
+				    					NULLIF(
+				    						TRIM(
+				    							JSON_VALUE(@json, @path_billing  + '.company')
+				    						)
+				    						, ''
+				    					)
+				    				)
+				    		WHEN 4 
+				    			THEN 
+				    				COALESCE(
+				    					NULLIF(
+				    						TRIM(
+				    							JSON_VALUE(@json, @path_billing  + '.company')
+				    						)
+				    						, ''
+				    					),
+				    					NULLIF(
+				    						TRIM(
+				    							JSON_VALUE(@json, @path_customer + '.company')
+				    						)
+				    						, ''
+				    					)
+				    				)
+				    	END,
+				    	'.',
+				    	''
+				    ),
+                    15
+                );
 			
 			SET @id_cliente = ISNULL(NULLIF(TRIM(@id_cliente), ''), @id_cliente_ocasional);
-
-            DECLARE @id_vendedor NVARCHAR(50) =
-                CASE JSON_VALUE(@json, '$.source_name')
-                    WHEN @source_name_generico 
-                        THEN @id_vendedor_generico
-                    WHEN @source_name_leyva 
-                        THEN @id_vendedor_leyva
-                    ELSE @id_vendedor_generico
-                END;
 
             /*
             SELECT DISTINCT
@@ -351,6 +351,13 @@ BEGIN TRY
                 UPPER(
                     JSON_VALUE(@json,'$.presentment_currency')
                 );
+            
+            DECLARE @id_sucursal	NVARCHAR(3) =
+                CASE
+                    WHEN @id_moneda =   'USD'
+                        THEN @id_sucursal_usd
+                    ELSE @id_sucursal_cop
+                END;
 
             DECLARE @id_referencia_flete   VARCHAR(50) =
                 CASE @id_moneda 
@@ -375,26 +382,28 @@ BEGIN TRY
             (
                 f430_id_fecha,
                 f430_id_tercero_fact,
+                f430_id_sucursal_fact,
                 f430_id_tercero_rem,
+                f430_id_sucursal_rem,
                 f430_fecha_entrega,
                 f430_num_dias_entrega,
                 f430_num_docto_referencia,
                 f430_referencia,
                 f430_id_moneda_docto,
-                f430_notas,
-                f430_id_tercero_vendedor
+                f430_notas
             )
             SELECT
                 f430_id_fecha               =   @id_fecha,
                 f430_id_tercero_fact        =   @id_cliente,
+                f430_id_sucursal_fact       =   @id_sucursal,
                 f430_id_tercero_rem         =   @id_cliente,
+                f430_id_sucursal_rem        =   @id_sucursal,
                 f430_fecha_entrega          =   @id_fecha_entrega,
                 f430_num_dias_entrega       =   @num_dias_entrega,
                 f430_num_docto_referencia   =   @order,
                 f430_referencia             =   @order,
                 f430_id_moneda_docto        =   @id_moneda,
-                f430_notas                  =   @order,
-                f430_id_tercero_vendedor    =   @id_vendedor;
+                f430_notas                  =   @order;
 
 --->================================================================================================================<---
 
@@ -404,7 +413,7 @@ BEGIN TRY
             INSERT INTO @line_items
             SELECT
                 id                      =   JSON_VALUE(LI.value, '$.id'),
-                price                   =   JSON_VALUE(LI.value, '$.price'),
+                price                   =   JSON_VALUE(LI.value, '$.price_set.presentment_money.amount'),
                 quantity                =   JSON_VALUE(LI.value, '$.quantity'),
                 sku                     =   JSON_VALUE(LI.value, '$.sku'),
                 variant_title           =   JSON_VALUE(LI.value, '$.variant_title'),
@@ -456,7 +465,7 @@ BEGIN TRY
                         WHEN 'L'
                             THEN '12/L'
                         WHEN 'XL'
-                            THEN '14/XL'
+                            THEN '14/XXL'
                         WHEN 'XXL'
                             THEN '16/XXL'
                         ELSE 'U'
@@ -489,7 +498,7 @@ BEGIN TRY
                 f431_num_dias_entrega   =   @num_dias_entrega,
                 f431_id_lista_precio    =   @id_lista_precio,
                 f431_cant_pedida_base   =   '1',
-                f431_precio_unitario    =   JSON_VALUE(SL.value, '$.price')
+                f431_precio_unitario    =   JSON_VALUE(SL.value, '$.price_set.presentment_money.amount')
             FROM OPENJSON(@json, '$.shipping_lines') AS SL
             WHERE
                 CAST(JSON_VALUE(SL.value, '$.price') AS DECIMAL(10,4)) > 0
