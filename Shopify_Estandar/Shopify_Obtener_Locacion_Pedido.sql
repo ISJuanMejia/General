@@ -71,12 +71,45 @@ BEGIN
                 dbo.fn_RemoveAccentMarks(LOWER(f013_descripcion)) = 'ciudad de mexico'
             )
             OR
-            -- Caso 5: Caso general
+            -- Caso 5: Nicaragua – Managua
+            (
+                dbo.fn_RemoveAccentMarks(LOWER(@pais_shopify)) = 'nicaragua'
+                AND 
+                (
+                    dbo.fn_RemoveAccentMarks(LOWER(@dpto_shopify)) = 'managua'
+                    OR
+                    @dpto_shopify IS NULL
+                )
+                AND 
+                dbo.fn_RemoveAccentMarks(LOWER(@ciudad_shopify)) = 'managua'
+                AND 
+                dbo.fn_RemoveAccentMarks(LOWER(f011_descripcion)) = 'nicaragua'
+                AND 
+                dbo.fn_RemoveAccentMarks(LOWER(f012_descripcion)) = 'managua'
+                AND 
+                dbo.fn_RemoveAccentMarks(LOWER(f013_descripcion)) = 'managua'
+            )
+            OR
+            -- Caso 6: Caso general
             (
                 dbo.fn_RemoveAccentMarks(LOWER(f012_descripcion)) = @dpto_shopify
                 AND
                 (
                     @ciudad_shopify = dbo.fn_RemoveAccentMarks(LOWER(f013_descripcion))
+                    OR
+                    dbo.fn_RemoveAccentMarks(
+                        REPLACE(
+                            LOWER(@ciudad_shopify), 
+                            ' ', 
+                            ''
+                        )
+                    )   =   dbo.fn_RemoveAccentMarks(
+                        REPLACE(
+                            LOWER(f013_descripcion), 
+                            ' ', 
+                            ''
+                        )
+                    )
                     OR
                     (
                         NOT EXISTS (

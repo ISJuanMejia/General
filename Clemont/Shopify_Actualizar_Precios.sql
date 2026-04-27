@@ -149,7 +149,7 @@ BEGIN TRY
     -- Obtener cadena de conexión al ERP
     SELECT TOP 1
         @conexion = cadena_conexion
-    FROM conexiones;
+    FROM [shopify-colombia-clemont].dbo.conexiones;
 
     /* -----------------------------------------------------------------------
        CARGA DESDE ERP — Maestro de ítems (ambos modos)
@@ -322,31 +322,34 @@ BEGIN TRY
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         )
     FROM @t126_mc_items_precios p
-
     -- ── Modo 1: precio por extensión ──────────────────────────────────────
     INNER JOIN @t121_mc_items_extensiones ext1
-        ON @modo = 1
-        AND p.f126_rowid_item_ext = ext1.f121_rowid
-
+        ON 
+            @modo = 1
+            AND 
+            p.f126_rowid_item_ext = ext1.f121_rowid
     INNER JOIN variantes v
-        ON @modo = 1
-        AND v.sku_erp = ext1.f121_id_barras_principal
-
+        ON 
+            @modo = 1
+            AND 
+            v.sku_erp = ext1.f121_id_barras_principal
     -- Filtro opcional por plan/criterio (Modo 1)
     LEFT JOIN @t125_mc_items_criterios crit1
-        ON @tiene_planes_y_criterios = 1
-        AND crit1.f125_rowid_item = ext1.f121_rowid_item
-
+        ON 
+            @tiene_planes_y_criterios = 1
+            AND 
+            crit1.f125_rowid_item = ext1.f121_rowid_item
     WHERE
         @modo = 1
-        AND ext1.f121_rowid IS NOT NULL
-        AND (
+        AND 
+        ext1.f121_rowid IS NOT NULL
+        AND 
+        (
             @tiene_planes_y_criterios = 0
-            OR crit1.f125_rowid_item IS NOT NULL
+            OR 
+            crit1.f125_rowid_item IS NOT NULL
         )
-
     UNION
-
     SELECT DISTINCT
         v.id_variante,
         v.sku_erp,
@@ -357,29 +360,35 @@ BEGIN TRY
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         )
     FROM @t126_mc_items_precios p
-
     -- ── Modo 2: precio por ítem base, barcode desde f120_referencia ───────
     -- No se necesita t121 porque el barcode está directamente en t120.
     INNER JOIN @t120_mc_items item
-        ON @modo = 2
-        AND p.f126_rowid_item = item.f120_rowid
-
+        ON 
+            @modo = 2
+            AND 
+            p.f126_rowid_item = item.f120_rowid
     INNER JOIN variantes v
-        ON @modo = 2
-        AND v.sku_erp = item.f120_referencia
-
+        ON
+            @modo = 2
+            AND 
+            v.sku_erp = item.f120_referencia
     -- Filtro opcional por plan/criterio (Modo 2)
     LEFT JOIN @t125_mc_items_criterios crit2
-        ON @tiene_planes_y_criterios = 1
-        AND crit2.f125_rowid_item = item.f120_rowid
-
+        ON
+            @tiene_planes_y_criterios = 1
+            AND 
+            crit2.f125_rowid_item = item.f120_rowid
     WHERE
         @modo = 2
-        AND item.f120_rowid IS NOT NULL
-        AND item.f120_referencia IS NOT NULL
-        AND (
+        AND 
+        item.f120_rowid IS NOT NULL
+        AND 
+        item.f120_referencia IS NOT NULL
+        AND 
+        (
             @tiene_planes_y_criterios = 0
-            OR crit2.f125_rowid_item IS NOT NULL
+            OR 
+            crit2.f125_rowid_item IS NOT NULL
         );
 
     /* -----------------------------------------------------------------------
@@ -396,7 +405,7 @@ BEGIN TRY
        El objeto precio_obj sigue el formato requerido por la API:
            { "variant": { "id": ..., "compare_at_price": ... } }
     ----------------------------------------------------------------------- */
-    MERGE INTO dbo.precios AS TARGET
+    MERGE INTO [shopify-colombia-clemont].dbo.precios AS TARGET
     USING (
         SELECT
             id_variante,
@@ -406,8 +415,10 @@ BEGIN TRY
     ) AS source
         ON target.id_variante = source.id_variante
 
-    WHEN MATCHED
-        AND target.precio_obj <> source.precio_obj
+    WHEN
+        MATCHED
+        AND 
+        target.precio_obj   <>  source.precio_obj
         THEN UPDATE SET
             target.precio_obj           = source.precio_obj,
             target.sincronizado         = 0,
@@ -428,7 +439,6 @@ BEGIN TRY
             0,
             NULL
         );
-
 END TRY
 BEGIN CATCH
     SELECT ERROR_MESSAGE() AS Error;

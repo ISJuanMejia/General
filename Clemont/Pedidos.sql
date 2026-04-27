@@ -46,6 +46,26 @@ BEGIN TRY
     DECLARE @id_cliente_ocasional   NVARCHAR(20)    =   '222222222';
 
     /*
+		*	Id tipo de cliente:
+		*		C004	->	id_tipo_cliente Addi
+		*		C001	->	id_tipo_cliente Manual
+		*		C008	->	id_tipo_cliente Mercado Libre
+		*		C006	->	id_tipo_cliente Gift Card
+		*		C005	->	id_tipo_cliente Sistecredito
+		*		C009	->	id_tipo_cliente Wompi
+		*		C013	->	id_tipo_cliente Bold
+		*		C015	->	id_tipo_cliente Sumas
+	*/
+	DECLARE @id_tipo_cliente_addi           NVARCHAR(4) =   'C004',
+            @id_tipo_cliente_manual         NVARCHAR(4) =   'C001',
+            @id_tipo_cliente_MercadoLibre	NVARCHAR(4) =   'C008',
+            @id_tipo_cliente_GiftCard       NVARCHAR(4) =   'C006',
+            @id_tipo_cliente_Sistecredito	NVARCHAR(4) =   'C005',
+            @id_tipo_cliente_Wompi          NVARCHAR(4) =   'C009',
+            @id_tipo_cliente_Bold	        NVARCHAR(4) =   'C013',
+            @id_tipo_cliente_Sumas	        NVARCHAR(4) =   'C015';
+
+    /*
         *   Número de días de entrega
     */
     DECLARE @num_dias_entrega   INT =   1;
@@ -104,6 +124,14 @@ BEGIN TRY
         f126_precio                 MONEY,
         f120_referencia    NVARCHAR(50)
     )
+
+    /*
+		*	Definición de la tabla de terceros del ERP
+	*/
+    DECLARE  @terceros_clientes_ERP TABLE (
+        f200_id         NVARCHAR(50),
+        f015_id_pais    NVARCHAR(3)
+    );
 
     /*
         *   Obtener la cadena de conexión del ERP
@@ -173,14 +201,44 @@ BEGIN TRY
         WHERE
             rn_1 = 1'
     );
+
+    INSERT INTO @terceros_clientes_ERP
+    EXEC('
+        SELECT DISTINCT
+            f200_id,
+            f015_id_pais
+        FROM OPENROWSET(
+            ''SQLNCLI''
+            ,''' + @conexion + '''
+            ,''
+                SELECT
+                    f200_id,
+                    f015_id_pais
+                FROM '+@base_datos + '.dbo.t200_mm_terceros
+                    INNER JOIN '+@base_datos + '.dbo.t201_mm_clientes
+                        ON
+                            f200_rowid  =   f201_rowid_tercero
+                    INNER JOIN '+@base_datos + '.dbo.t015_mm_contactos
+                        ON
+                            f015_rowid  =   f201_rowid_contacto
+            ''
+        )
+    ');
 	
 --->================================================================================================================<---
 
-    DECLARE @ordenes TABLE (
-		id_orden	NVARCHAR(20),
-		orden_obj	NVARCHAR(MAX)
-	);
+    /*
+        *   Actualizar a estado 2 pedidos que estén en estado superior a 3
+    */
+    UPDATE ord
+    SET id_estado = 2
+    FROM [shopify-colombia-clemont].[dbo].[ordenes] AS ord
+    WHERE
+        id_estado = 4;
 
+    /*
+        *   Actualizar a estado 3 pedidos ya existentes
+    */
     UPDATE ord
     SET id_estado = 3
     FROM [shopify-colombia-clemont].[dbo].[ordenes] AS ord
@@ -191,6 +249,31 @@ BEGIN TRY
                 f430_referencia =   id_orden
     WHERE
         id_estado = 2;
+    
+    /*
+        *   Actualizar a estado 2 pedidos aún no existentes pero que aparece como que ya existieran
+    */
+    UPDATE ord
+    SET id_estado = 2
+    FROM [shopify-colombia-clemont].[dbo].[ordenes] AS ord
+        LEFT JOIN @t430_cm_pv_docto
+            ON
+                f430_num_docto_referencia   =   id_orden
+                OR
+                f430_referencia =   id_orden
+    WHERE
+        id_estado   <=  3
+        AND
+        (
+            f430_num_docto_referencia   IS NULL
+            AND
+            f430_referencia   IS NULL
+        );
+
+    DECLARE @ordenes TABLE (
+		id_orden	NVARCHAR(20),
+		orden_obj	NVARCHAR(MAX)
+	);
 
     /*
 		*	Obtener órdenes pendientes de procesamiento que se encuentran en estado 2 y 
@@ -212,20 +295,48 @@ BEGIN TRY
 		intentos	<=	@max_intentos
         AND 
         (
+            -- (
+            @tipo_proceso = 'POS'
+            --     AND 
+            --     (
+            --         -- Caso vacío
+            --         LTRIM(
+            --             RTRIM(
+            --                 ISNULL(
+            --                     JSON_VALUE(orden_obj, '$.tags'), 
+            --                     ''
+            --                 )
+            --             )
+            --         )   =   ''
+            --         -- Caso PERSONALSHOPPER
+            --         OR 
+            --         CHARINDEX(
+            --             'personalshopper',
+            --             LOWER(
+            --                 ISNULL(
+            --                     JSON_VALUE(orden_obj, '$.tags'), 
+            --                     ''
+            --                 )
+            --             )
+            --         ) > 0
+            --         -- Caso ecommerce
+            --         OR 
+            --         CHARINDEX(
+            --             'ecommerce',
+            --             LOWER(
+            --                 ISNULL(
+            --                     JSON_VALUE(orden_obj, '$.tags'), 
+            --                     ''
+            --                 )
+            --             )
+            --         ) > 0
+            --     )
+            -- )
+            OR 
             (
-                @tipo_proceso = 'POS'
-                AND (
-                    -- Caso vacío
-                    LTRIM(
-                        RTRIM(
-                            ISNULL(
-                                JSON_VALUE(orden_obj, '$.tags'), 
-                                ''
-                            )
-                        )
-                    )   =   ''
-                    -- Caso PERSONALSHOPPER
-                    OR 
+                @tipo_proceso = 'ONLINE'
+                AND 
+                (
                     CHARINDEX(
                         'personalshopper',
                         LOWER(
@@ -234,48 +345,11 @@ BEGIN TRY
                                 ''
                             )
                         )
-                    ) > 0
-                    -- Caso ecommerce
-                    OR 
-                    CHARINDEX(
-                        'ecommerce',
-                        LOWER(
-                            ISNULL(
-                                JSON_VALUE(orden_obj, '$.tags'), 
-                                ''
-                            )
-                        )
-                    ) > 0
-                )
-            )
-            OR 
-            (
-                @tipo_proceso = 'ONLINE'
-                AND 
-                (
-                    -- ONLINE acepta vacíos o ecommerce
-                    LTRIM(
-                        RTRIM(
-                            ISNULL(
-                                JSON_VALUE(orden_obj, '$.tags'), 
-                                ''
-                            )
-                        )
-                    ) = ''
-                    OR 
-                    CHARINDEX(
-                        'ecommerce',
-                        LOWER(
-                            ISNULL(
-                                JSON_VALUE(orden_obj, '$.tags'), 
-                                ''
-                            )
-                        )
-                    ) > 0
+                    )   =   0
                 )
             )
         )
-    ORDER BY ID DESC; 
+    ORDER BY ID DESC;
 	
 --->================================================================================================================<---
 
@@ -428,6 +502,35 @@ BEGIN TRY
 
             SET @id_cliente = ISNULL(NULLIF(TRIM(@id_cliente), ''), @id_cliente_ocasional);
 
+            IF EXISTS 
+            (
+                SELECT 1 
+                FROM @terceros_clientes_ERP 
+                WHERE 
+                    f200_id =   @id_cliente 
+                    AND 
+                    f015_id_pais IS NULL
+            )
+            OR
+            NOT EXISTS
+            (
+                SELECT 1 
+                FROM @terceros_clientes_ERP 
+                WHERE 
+                    f200_id =   @id_cliente 
+            )
+            BEGIN
+                UPDATE [shopify-colombia-clemont].[dbo].ordenes
+                SET
+                    id_estado   =   1,
+                    intentos    =   0
+                WHERE
+                    id_orden    =   @order;
+
+                SET @counter += 1;
+                CONTINUE;
+            END;
+
             DECLARE @id_vendedor    NVARCHAR(20)    =   @id_vendedor_defecto;
 
             DECLARE @id_tipo_cli_fact   NVARCHAR(10)    =   '';
@@ -454,17 +557,19 @@ BEGIN TRY
                 SET @id_tipo_cli_fact   =
                     CASE
                         WHEN    CHARINDEX('sistecredito', @tags) > 0
-                            THEN    'C005'
+                            THEN    @id_tipo_cliente_Sistecredito
                         WHEN    CHARINDEX('addi', @tags) > 0
-                            THEN    'C004'
+                            THEN    @id_tipo_cliente_addi
                         WHEN    CHARINDEX('wompi', @tags) > 0 
-                            THEN    'C009'
+                            THEN    @id_tipo_cliente_Wompi
                         WHEN    CHARINDEX('bold', @tags) > 0 
-                            THEN    'C013'
+                            THEN    @id_tipo_cliente_Bold
                         WHEN    CHARINDEX('mercado', @tags) > 0 
-                            THEN    'C008'
+                            THEN    @id_tipo_cliente_MercadoLibre
                         WHEN    CHARINDEX('gift', @tags) > 0 
-                            THEN    'C006'
+                            THEN    @id_tipo_cliente_GiftCard
+                        WHEN    CHARINDEX('Sumas', @tags) > 0 
+                            THEN    @id_tipo_cliente_Sumas
                     END
             END;
 
@@ -474,20 +579,22 @@ BEGIN TRY
                     @id_tipo_cli_fact   =
                         CASE
                             WHEN    JSON_VALUE(transaccion_obj, '$.gateway') LIKE '%Sistecredito%'
-                                THEN    'C005'
+                                THEN    @id_tipo_cliente_Sistecredito
                             WHEN    JSON_VALUE(transaccion_obj, '$.gateway') LIKE '%Addi%'
-                                THEN    'C004'
+                                THEN    @id_tipo_cliente_addi
                             WHEN    JSON_VALUE(transaccion_obj, '$.gateway') LIKE '%Wompi%'
-                                THEN    'C009'
+                                THEN    @id_tipo_cliente_Wompi
                             WHEN    JSON_VALUE(transaccion_obj, '$.gateway') LIKE '%Bold%'
-                                THEN    'C013'
+                                THEN    @id_tipo_cliente_Bold
                             WHEN
                                 JSON_VALUE(transaccion_obj, '$.gateway') LIKE '%Mercado Pago%'
                                 OR
                                 JSON_VALUE(transaccion_obj, '$.gateway') LIKE '%MercadoPago%'
-                                THEN    'C008'
+                                THEN    @id_tipo_cliente_MercadoLibre
                             WHEN    JSON_VALUE(transaccion_obj, '$.gateway') LIKE '%gift%'
-                                THEN    'C006'
+                                THEN    @id_tipo_cliente_GiftCard
+                            WHEN    JSON_VALUE(transaccion_obj, '$.gateway') LIKE '%Sumas%'
+                                THEN    @id_tipo_cliente_Sumas
                         END
                 FROM transacciones_ordenes
                 WHERE
@@ -670,7 +777,9 @@ BEGIN TRY
             WHERE
                 LI.discount_amount  IS NOT NULL
                 AND 
-                CAST(LI.discount_amount AS DECIMAL) >   0;
+                CAST(LI.discount_amount AS DECIMAL) >   0
+                AND
+                CAST(LI.discount_amount AS DECIMAL) !=  CAST(LI.price AS DECIMAL);
  
             INSERT INTO @final
             (

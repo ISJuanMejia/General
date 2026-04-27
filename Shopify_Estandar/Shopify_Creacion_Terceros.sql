@@ -84,7 +84,9 @@ BEGIN TRY
 		*		4	->	Lista de precios 4
 	*/
 	DECLARE @id_lista_precios_1	NVARCHAR(3) =   '1', -- TODO -> Configurar según el caso, validar según reglas del cliente
-            @id_lista_precios_2	NVARCHAR(3) =   '2'; -- TODO -> Configurar según el caso, validar según reglas del cliente
+            @id_lista_precios_2	NVARCHAR(3) =   '2', -- TODO -> Configurar según el caso, validar según reglas del cliente
+            @id_lista_precios_3	NVARCHAR(3) =   '3', -- TODO -> Configurar según el caso, validar según reglas del cliente
+            @id_lista_precios_4	NVARCHAR(3) =   '4'; -- TODO -> Configurar según el caso, validar según reglas del cliente
 
     /*
 		TODO -> Configurar según el caso, validar según reglas del cliente, eliminar comentarios cuando finalice configuración
@@ -237,12 +239,19 @@ BEGIN TRY
 		*	Definición de la sección de entidades dinamicas cliente del conector
 	*/
 	DECLARE @Ent_Dinamica_Cliente	TABLE (
-		f201_id_tercero			NVARCHAR(15),
-		f201_id_sucursal		NVARCHAR(3),
-		f753_id_grupo_entidad	NVARCHAR(30),
-		f753_id_entidad			NVARCHAR(30),
-		f753_id_atributo		NVARCHAR(30)
-	)
+		f201_id_tercero					NVARCHAR(15),
+		f201_id_sucursal				NVARCHAR(3),
+		f753_id_grupo_entidad			NVARCHAR(30),
+		f753_id_entidad					NVARCHAR(30),
+		f753_id_atributo				NVARCHAR(30),
+		f753_dato_numerico				NVARCHAR(28),
+		f753_dato_texto					NVARCHAR(2000),
+		f753_dato_fecha_hora			NVARCHAR(8),
+		f753_id_maestro					NVARCHAR(10),
+		f753_id_maestro_detalle			NVARCHAR(20),
+		f753_id_maestro_interno_detalle	NVARCHAR(100),
+		f753_id_maestro_interno			NVARCHAR(10)
+	);
 	
 --->================================================================================================================<---
 
@@ -274,7 +283,6 @@ BEGIN TRY
 	DECLARE @json		NVARCHAR(MAX)	= 	'';
 	DECLARE @total		INT	=	(SELECT COUNT(*) FROM @ordenes);	--	*	Total de órdenes a procesar
 	DECLARE @counter	INT	=	1;									--	*	Contador de órdenes procesadas
-
 	WHILE @counter <= @total
 	BEGIN
 		BEGIN TRY
@@ -688,42 +696,17 @@ BEGIN TRY
 							FROM @clientes
 							FOR JSON PATH,
 							INCLUDE_NULL_VALUES
-						)						,
+						),
 						[Imptos y Reten] = (
 							SELECT *
 							FROM @Imptos_y_Reten
       						FOR JSON PATH,
 							INCLUDE_NULL_VALUES
     					)
-						/*
-						*	TODO EN DESARROLLO
-						,
-						[Criterios_Clientes] = (
-							SELECT
-								@id_cliente AS F207_ID_TERCERO,
-								'001' AS F207_ID_SUCURSAL,
-								'' AS F207_ID_PLAN_CRITERIOS,
-								'' AS F207_ID_CRITERIO_MAYOR
-								FOR JSON PATH, 
-								INCLUDE_NULL_VALUES
-						),
-						[Ent_Dinamica_Cliente] = (
-							SELECT
-								@id_cliente AS f201_id_tercero,
-								'001' AS f201_id_sucursal,
-								'' AS f753_dato_texto
-							FOR JSON PATH, 
-							INCLUDE_NULL_VALUES
-						)*/
 					FOR JSON PATH,
 					WITHOUT_ARRAY_WRAPPER,
 					INCLUDE_NULL_VALUES
 				);
-
-			SET @counter = @counter + 1;
-			DELETE @terceros;
-			DELETE @clientes;
-			DELETE @Imptos_y_Reten;
 		END TRY
 		BEGIN CATCH
 			--	*	Registrar el error en la orden y continuar con la siguiente
@@ -745,10 +728,12 @@ BEGIN TRY
 END TRY
 BEGIN CATCH
     SELECT 
-        ERROR_NUMBER()		AS	ErrorNumber,
-        ERROR_SEVERITY()	AS	ErrorSeverity,
-        ERROR_STATE()		AS	ErrorState,
-        ERROR_PROCEDURE()	AS	ErrorProcedure,
-        ERROR_LINE()		AS	ErrorLine,
-        ERROR_MESSAGE()		AS	ErrorMessage;
+		indicaError         =   CAST(1 AS BIT), 
+        descripcionError    =   CONCAT('Error: ', ERROR_MESSAGE()),
+        ErrorNumber         =   ERROR_NUMBER(),
+        ErrorSeverity       =   ERROR_SEVERITY(),
+        ErrorState          =   ERROR_STATE(),
+        ErrorProcedure      =   ERROR_PROCEDURE(),
+        ErrorLine           =   ERROR_LINE(),
+        ErrorMessage        =   ERROR_MESSAGE();
 END CATCH;

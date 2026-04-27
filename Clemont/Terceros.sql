@@ -27,7 +27,7 @@ BEGIN TRY
 	/*
 		*	Configuración de ejecución del script
 	*/
-	DECLARE @batch_size	INT	=   15;	--	*	Cuantas órdenes se traen por petición
+	DECLARE @batch_size	INT	=   25;	--	*	Cuantas órdenes se traen por petición
 
 	/*
 		*	Origen de los datos del cliente/tercero
@@ -57,6 +57,7 @@ BEGIN TRY
 		*		C005	->	id_tipo_cliente Sistecredito
 		*		C009	->	id_tipo_cliente Wompi
 		*		C013	->	id_tipo_cliente Bold
+		*		C015	->	id_tipo_cliente Sumas
 	*/
 	DECLARE @id_tipo_cliente_addi           NVARCHAR(4) =   'C004',
             @id_tipo_cliente_manual         NVARCHAR(4) =   'C001',
@@ -64,7 +65,8 @@ BEGIN TRY
             @id_tipo_cliente_GiftCard       NVARCHAR(4) =   'C006',
             @id_tipo_cliente_Sistecredito	NVARCHAR(4) =   'C005',
             @id_tipo_cliente_Wompi          NVARCHAR(4) =   'C009',
-            @id_tipo_cliente_Bold	        NVARCHAR(4) =   'C013';
+            @id_tipo_cliente_Bold	        NVARCHAR(4) =   'C013',
+            @id_tipo_cliente_Sumas	        NVARCHAR(4) =   'C015';
     
     DECLARE @id_pais_defecto	NVARCHAR(3)	=	'',
 			@id_dpto_defecto	NVARCHAR(3)	=	'',
@@ -197,20 +199,20 @@ BEGIN TRY
 			*/
 			DECLARE @base_path NVARCHAR(100) =
             CASE 
-                WHEN @location_origin_data = 1 THEN '$.customer.default_address'
-                WHEN @location_origin_data = 2 THEN '$.billing_address'
+                WHEN @location_origin_data = 1 THEN @path_customer
+                WHEN @location_origin_data = 2 THEN @path_billing
                 WHEN @location_origin_data = 3 THEN '$.shipping_address'
                 WHEN @location_origin_data = 4 THEN
                     CASE
-                        WHEN JSON_VALUE(@json, '$.customer.default_address.city') IS NOT NULL
-                            THEN '$.customer.default_address'
-                        ELSE '$.billing_address'
+                        WHEN JSON_VALUE(@json, @path_customer + '.city') IS NOT NULL
+                            THEN @path_customer
+                        ELSE @path_billing
                     END
                 WHEN @location_origin_data = 5 THEN
                     CASE
-                        WHEN JSON_VALUE(@json, '$.billing_address.city') IS NOT NULL
-                            THEN '$.billing_address'
-                        ELSE '$.customer.default_address'
+                        WHEN JSON_VALUE(@json, @path_billing + '.city') IS NOT NULL
+                            THEN @path_billing
+                        ELSE @path_customer
                     END
                 ELSE ''
             END;
@@ -266,56 +268,63 @@ BEGIN TRY
 			SET @order	=	JSON_VALUE(@json, '$.name');	--	*	Obtener el número de la orden
 
 			DECLARE @id_cliente NVARCHAR(100) =
-				CASE @client_origin_data
-					WHEN 1 
-						THEN 
-							NULLIF(
-								TRIM(
-									JSON_VALUE(@json, @path_customer + '.company')
-								)
-								, ''
-							)
-					WHEN 2 
-						THEN 
-							NULLIF(
-								TRIM(
-									JSON_VALUE(@json, @path_billing  + '.company')
-								)
-								, ''
-							)
-					WHEN 3 
-						THEN 
-							COALESCE(
-								NULLIF(
-									TRIM(
-										JSON_VALUE(@json, @path_customer + '.company')
+				LEFT(
+                    REPLACE(
+						CASE @client_origin_data
+							WHEN 1 
+								THEN 
+									NULLIF(
+										TRIM(
+											JSON_VALUE(@json, @path_customer + '.company')
+										)
+										, ''
 									)
-									, ''
-								),
-								NULLIF(
-									TRIM(
-										JSON_VALUE(@json, @path_billing  + '.company')
+							WHEN 2 
+								THEN 
+									NULLIF(
+										TRIM(
+											JSON_VALUE(@json, @path_billing  + '.company')
+										)
+										, ''
 									)
-									, ''
-								)
-							)
-					WHEN 4 
-						THEN 
-							COALESCE(
-								NULLIF(
-									TRIM(
-										JSON_VALUE(@json, @path_billing  + '.company')
+							WHEN 3 
+								THEN 
+									COALESCE(
+										NULLIF(
+											TRIM(
+												JSON_VALUE(@json, @path_customer + '.company')
+											)
+											, ''
+										),
+										NULLIF(
+											TRIM(
+												JSON_VALUE(@json, @path_billing  + '.company')
+											)
+											, ''
+										)
 									)
-									, ''
-								),
-								NULLIF(
-									TRIM(
-										JSON_VALUE(@json, @path_customer + '.company')
+							WHEN 4 
+								THEN 
+									COALESCE(
+										NULLIF(
+											TRIM(
+												JSON_VALUE(@json, @path_billing  + '.company')
+											)
+											, ''
+										),
+										NULLIF(
+											TRIM(
+												JSON_VALUE(@json, @path_customer + '.company')
+											)
+											, ''
+										)
 									)
-									, ''
-								)
-							)
-				END;
+						END,
+				    	'.',
+				    	''
+				    ),
+                    15
+                );
 			
 			IF ISNULL(@id_cliente, '') = ''
 			BEGIN
@@ -538,6 +547,8 @@ BEGIN TRY
                             THEN    @id_tipo_cliente_Wompi
                         WHEN    JSON_VALUE(transaccion_obj, '$.gateway') LIKE '%Bold%'
                             THEN    @id_tipo_cliente_Bold
+                        WHEN    JSON_VALUE(transaccion_obj, '$.gateway') LIKE '%Sumas%'
+                            THEN    @id_tipo_cliente_Sumas
                         ELSE    @id_tipo_cliente_manual
                     END
             FROM transacciones_ordenes
