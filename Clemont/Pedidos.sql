@@ -819,13 +819,15 @@ BEGIN TRY
                 );
         END TRY
         BEGIN CATCH
-            -- SELECT
-            --     ErrorNumber         =   ERROR_NUMBER(),
-            --     ErrorSeverity       =   ERROR_SEVERITY(),
-            --     ErrorState          =   ERROR_STATE(),
-            --     ErrorProcedure      =   ERROR_PROCEDURE(),
-            --     ErrorLine           =   ERROR_LINE(),
-            --     ErrorMessage        =   ERROR_MESSAGE();
+            /*
+            SELECT
+                ErrorNumber         =   ERROR_NUMBER(),
+                ErrorSeverity       =   ERROR_SEVERITY(),
+                ErrorState          =   ERROR_STATE(),
+                ErrorProcedure      =   ERROR_PROCEDURE(),
+                ErrorLine           =   ERROR_LINE(),
+                ErrorMessage        =   ERROR_MESSAGE();
+            */
 
             UPDATE [shopify-colombia-clemont].dbo.ordenes
             SET intentos = intentos + 1
