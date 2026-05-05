@@ -566,8 +566,6 @@ BEGIN TRY
                             THEN    @id_tipo_cliente_Bold
                         WHEN    CHARINDEX('mercado', @tags) > 0 
                             THEN    @id_tipo_cliente_MercadoLibre
-                        WHEN    CHARINDEX('gift', @tags) > 0 
-                            THEN    @id_tipo_cliente_GiftCard
                         WHEN    CHARINDEX('Sumas', @tags) > 0 
                             THEN    @id_tipo_cliente_Sumas
                     END
