@@ -1,4 +1,6 @@
---VERSION FINAL CLEMONT PEDIDOS - PRUEBAS
+/*
+    *   VERSION FINAL CLEMONT PEDIDOS
+*/
 BEGIN TRY
     SET XACT_ABORT ON;
     /*
@@ -843,11 +845,11 @@ BEGIN TRY
 END TRY
 BEGIN CATCH
     SELECT
-        0    AS idDocumento,
-        0    AS indicaParalelismo,
-        ERROR_MESSAGE() AS descripcion,
-        '0'  AS idOrden,
-        NULL AS json;
+        idDocumento         =   0,
+        indicaParalelismo   =   0,
+        descripcion         =   ERROR_MESSAGE(),
+        idOrden             =   '0',
+        json                =   NULL;
 END CATCH;
  
 SELECT * FROM @final;
