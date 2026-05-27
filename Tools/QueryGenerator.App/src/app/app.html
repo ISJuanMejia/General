@@ -1,5 +1,32 @@
-<div style="padding: 20px; font-family: sans-serif;">
-  <h1>Generador de Queries de Terceros</h1>
+<div style="padding: 20px; font-family: sans-serif; max-width: 1000px; margin: 0 auto;">
+  <h1>Generador de Queries Ecommerce</h1>
+
+  <div style="background: #f4f4f4; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+    <h3>Tipo de Generación</h3>
+    <div style="display: flex; gap: 20px;">
+      <div class="form-group">
+        <label>Tipo de Query:</label>
+        <select [(ngModel)]="config.queryType" (change)="onQueryTypeChange()">
+          <option [ngValue]="QueryType.Terceros">Terceros</option>
+          <option [ngValue]="QueryType.Pedidos">Pedidos</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Ecommerce:</label>
+        <select [(ngModel)]="config.ecommerce">
+          <option [ngValue]="EcommerceType.Shopify">Shopify</option>
+          <option [ngValue]="EcommerceType.VTEX">VTEX</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Versión Aplicativo:</label>
+        <select [(ngModel)]="config.version">
+          <option [ngValue]="AppVersion.V1">Versión 1</option>
+          <option [ngValue]="AppVersion.V2">Versión 2</option>
+        </select>
+      </div>
+    </div>
+  </div>
 
   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
     <section>
@@ -17,33 +44,59 @@
         <input [(ngModel)]="config.descripcionConector" type="text" />
       </div>
       <div class="form-group">
-        <label>Sucursal ERP:</label>
-        <input [(ngModel)]="config.idSucursal" type="text" />
-      </div>
-      <div class="form-group">
-        <label>Lista de Precio Defecto:</label>
-        <input [(ngModel)]="config.idListaPrecio" type="text" />
-      </div>
-      <div class="form-group">
-        <label>ID CIIU:</label>
-        <input [(ngModel)]="config.idCiiu" type="text" />
-      </div>
-      <div class="form-group">
         <label>
           <input [(ngModel)]="config.indicaParalelismo" type="checkbox" /> Indica Paralelismo
         </label>
       </div>
-      <div class="form-group">
-        <label>
-          <input [(ngModel)]="config.processClientWithoutId" type="checkbox" /> Procesar sin ID
-        </label>
+
+      <div *ngIf="config.queryType === QueryType.Terceros">
+        <div class="form-group">
+          <label>Sucursal ERP:</label>
+          <input [(ngModel)]="config.idSucursal" type="text" />
+        </div>
+        <div class="form-group">
+          <label>Lista de Precio Defecto:</label>
+          <input [(ngModel)]="config.idListaPrecio" type="text" />
+        </div>
+        <div class="form-group">
+          <label>ID CIIU:</label>
+          <input [(ngModel)]="config.idCiiu" type="text" />
+        </div>
+        <div class="form-group">
+          <label>
+            <input [(ngModel)]="config.processClientWithoutId" type="checkbox" /> Procesar sin ID
+          </label>
+        </div>
+      </div>
+
+      <div *ngIf="config.queryType === QueryType.Pedidos">
+        <div class="form-group">
+          <label>ID CO:</label>
+          <input [(ngModel)]="config.idCo" type="text" />
+        </div>
+        <div class="form-group">
+          <label>ID Tipo Docto:</label>
+          <input [(ngModel)]="config.idTipoDocto" type="text" />
+        </div>
+        <div class="form-group">
+          <label>ID Vendedor:</label>
+          <input [(ngModel)]="config.idVendedor" type="text" />
+        </div>
+        <div class="form-group">
+          <label>Unidad Medida Item:</label>
+          <input [(ngModel)]="config.unidadMedidaItem" type="text" />
+        </div>
+        <div class="form-group">
+          <label>Referencia Flete:</label>
+          <input [(ngModel)]="config.referenciaFlete" type="text" />
+        </div>
       </div>
     </section>
 
     <section>
       <h3>Origen de Datos y Localización</h3>
       <div class="form-group">
-        <label>Origen Datos Cliente (1:Cust, 2:Bill, 3:C->B, 4:B->C):</label>
+        <label>Origen Datos Cliente:</label>
         <select [(ngModel)]="config.clientOriginData">
           <option [ngValue]="1">Customer</option>
           <option [ngValue]="2">Billing</option>
@@ -52,7 +105,7 @@
         </select>
       </div>
       <div class="form-group">
-        <label>Origen Datos Localización (1:Cust, 2:Bill, 3:Ship):</label>
+        <label>Origen Datos Localización:</label>
         <select [(ngModel)]="config.locationOriginData">
           <option [ngValue]="1">Customer</option>
           <option [ngValue]="2">Billing</option>
@@ -61,49 +114,68 @@
       </div>
       <div class="form-group">
         <label>País/Dpto/Ciudad Defecto (Siesa):</label>
-        <input [(ngModel)]="config.idPaisDefecto" placeholder="Pais" style="width: 50px;" />
-        <input [(ngModel)]="config.idDptoDefecto" placeholder="Dpto" style="width: 50px;" />
-        <input [(ngModel)]="config.idCiudadDefecto" placeholder="Ciudad" style="width: 50px;" />
+        <div style="display: flex; gap: 5px;">
+          <input [(ngModel)]="config.idPaisDefecto" placeholder="Pais" style="width: 33%;" />
+          <input [(ngModel)]="config.idDptoDefecto" placeholder="Dpto" style="width: 33%;" />
+          <input [(ngModel)]="config.idCiudadDefecto" placeholder="Ciudad" style="width: 33%;" />
+        </div>
       </div>
     </section>
   </div>
 
   <hr />
 
-  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+  <!-- Specific Sections -->
+  <div *ngIf="config.queryType === QueryType.Terceros" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
     <section>
       <h3>Impuestos</h3>
       <button (click)="addTax()">Agregar Impuesto</button>
-      <div *ngFor="let tax of config.taxes; let i = index" style="margin-top: 10px; border: 1px solid #ccc; padding: 5px;">
+      <div *ngFor="let tax of config.taxes; let i = index" style="margin-top: 10px; border: 1px solid #ccc; padding: 5px; border-radius: 4px;">
         <input [(ngModel)]="tax.tipoReg" placeholder="Tipo Reg" style="width: 60px;" />
         <input [(ngModel)]="tax.clase" placeholder="Clase" style="width: 60px;" />
         <input [(ngModel)]="tax.valorTercero" placeholder="Valor Tcro" style="width: 60px;" />
-        <button (click)="removeTax(i)">X</button>
+        <button (click)="removeTax(i)" style="color: red;">X</button>
       </div>
     </section>
 
     <section>
       <h3>Entidades Dinámicas</h3>
       <button (click)="addEntity()">Agregar Entidad</button>
-      <div *ngFor="let ent of config.dynamicEntities; let i = index" style="margin-top: 10px; border: 1px solid #ccc; padding: 5px;">
-        <input [(ngModel)]="ent.idEntidad" placeholder="Entidad" />
-        <input [(ngModel)]="ent.idAtributo" placeholder="Atributo" />
-        <input [(ngModel)]="ent.idMaestro" placeholder="Maestro" />
-        <input [(ngModel)]="ent.idMaestroDetalle" placeholder="Detalle" />
-        <button (click)="removeEntity(i)">X</button>
+      <div *ngFor="let ent of config.dynamicEntities; let i = index" style="margin-top: 10px; border: 1px solid #ccc; padding: 10px; border-radius: 4px;">
+        <div style="display: flex; flex-direction: column; gap: 5px;">
+           <input [(ngModel)]="ent.idEntidad" placeholder="ID Entidad" />
+           <input [(ngModel)]="ent.idAtributo" placeholder="ID Atributo" />
+           <input [(ngModel)]="ent.idMaestro" placeholder="ID Maestro" />
+           <input [(ngModel)]="ent.idMaestroDetalle" placeholder="ID Maestro Detalle" />
+           <button (click)="removeEntity(i)" style="color: red; align-self: flex-end;">Eliminar</button>
+        </div>
       </div>
     </section>
   </div>
 
-  <div style="margin-top: 30px; text-align: center;">
-    <button (click)="generateSql()" style="padding: 10px 20px; font-size: 1.2em; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
-      Generar SQL de Terceros
+  <div *ngIf="config.queryType === QueryType.Pedidos">
+    <section>
+      <h3>Mapeo de Pagos</h3>
+      <button (click)="addPayment()">Agregar Mapeo</button>
+      <div *ngFor="let pay of config.payments; let i = index" style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
+        <input [(ngModel)]="pay.gatewayName" placeholder="Nombre Gateway (Shopify/VTEX)" style="flex: 2;" />
+        <input [(ngModel)]="pay.erpCode" placeholder="Código ERP (C001, etc)" style="flex: 1;" />
+        <button (click)="removePayment(i)" style="color: red;">X</button>
+      </div>
+    </section>
+  </div>
+
+  <div style="margin-top: 40px; text-align: center; border-top: 2px solid #eee; padding-top: 20px;">
+    <button (click)="generateSql()" style="padding: 15px 30px; font-size: 1.3em; background-color: #28a745; color: white; border: none; border-radius: 8px; cursor: pointer; transition: background 0.3s;">
+      Generar Archivo .SQL
     </button>
   </div>
 </div>
 
 <style>
-  .form-group { margin-bottom: 10px; }
-  label { display: block; margin-bottom: 5px; font-weight: bold; }
-  input[type="text"], input[type="number"], select { width: 100%; padding: 5px; box-sizing: border-box; }
+  .form-group { margin-bottom: 15px; flex: 1; }
+  label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
+  input[type="text"], input[type="number"], select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+  button { cursor: pointer; }
+  h3 { border-bottom: 1px solid #eee; padding-bottom: 5px; color: #333; }
 </style>
