@@ -1,0 +1,6 @@
+@GetOrdersAndTransactionsFromShopify.Api_HostAddress = http://localhost:5100
+
+GET {{GetOrdersAndTransactionsFromShopify.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
