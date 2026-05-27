@@ -282,9 +282,10 @@ BEGIN TRY
 		orden_obj
 	FROM [shopify-colombia-padova].dbo.ordenes 
 	WHERE 
-		id_estado	=	1
-		AND
-		intentos	<=	3;
+		-- id_estado	=	1
+		-- AND
+		-- intentos	<=	3;
+		id_orden = '#22325'
 
 --->================================================================================================================<---
 

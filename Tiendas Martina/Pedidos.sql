@@ -1,4 +1,5 @@
 SET XACT_ABORT ON;
+BEGIN TRY
 
 DECLARE @json VARCHAR(MAX) = '';
 
@@ -29,7 +30,6 @@ DECLARE @tmpDescuento       TABLE ([row] INT, amount NVARCHAR(20));
 DECLARE @paymentType        NVARCHAR(MAX);
 DECLARE @paymentValue       NVARCHAR(MAX);
 
-BEGIN TRY
 
 	DECLARE @conexion NVARCHAR(MAX) = (SELECT TOP 1 cadena_conexion FROM Conexiones);
 	DECLARE @base_datos NVARCHAR(MAX) = (SELECT TOP 1 base_datos FROM Conexiones);

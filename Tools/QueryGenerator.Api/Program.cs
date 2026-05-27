@@ -6,6 +6,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddScoped<ISqlGeneratorService, SqlGeneratorService>();
 
+// Swagger
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
 // CORS
 builder.Services.AddCors(options =>
 {
@@ -18,6 +22,10 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// Swagger
+app.UseSwagger();
+app.UseSwaggerUI();
 
 // Configure the HTTP request pipeline.
 app.UseCors("AllowAll");

@@ -3,54 +3,108 @@ DECLARE @endpoint NVARCHAR(500) = 'http://localhost:82/v3.1/conectoresimportar?i
 UPDATE o
 SET id_estado = 3
 FROM ordenes o
-INNER JOIN [LinkedtoRDS].[UnoEE_Cnadar_Real].[dbo].t200_mm_terceros t 
-ON t.f200_id = ISNULL(JSON_VALUE(orden_obj_origen, '$.clientProfileData.document'), JSON_VALUE(orden_obj_origen, '$.clientProfileData.corporateDocument'))
-WHERE o.id_tienda = 1 
-AND (f200_ind_proveedor = 1
-OR f200_ind_accionista = 1
-OR f200_ind_empleado = 1)
-AND o.id_estado in (1,2) 
+    INNER JOIN [LinkedtoRDS].[UnoEE_Cnadar_Real].[dbo].t200_mm_terceros t 
+        ON 
+            t.f200_id   =   ISNULL(
+                JSON_VALUE(orden_obj_origen, '$.clientProfileData.document'), 
+                JSON_VALUE(orden_obj_origen, '$.clientProfileData.corporateDocument')
+            )
+WHERE
+    o.id_tienda = 1 
+    AND 
+    (
+        f200_ind_proveedor = 1
+        OR 
+        f200_ind_accionista = 1
+        OR 
+        f200_ind_empleado = 1
+    )
+    AND
+    o.id_estado in (1, 2) 
 
 UPDATE ordenes
 SET 
-    endpoint = @endpoint,
-    id_estado = 2,
-    intentos = 0,
-    fecha_creacion = GETDATE(),
-    orden_obj_destino = JSON_QUERY((
-        SELECT
-            -- Nodo Terceros
-            JSON_QUERY((
-                SELECT *
-                FROM (
-                    SELECT 
-                        CASE 
-						   WHEN ISNULL(JSON_VALUE(orden_obj_origen, '$.clientProfileData.document'), '') = ''  
-						  THEN JSON_VALUE(orden_obj_origen, '$.clientProfileData.corporateDocument')
-						  ELSE JSON_VALUE(orden_obj_origen, '$.clientProfileData.document') 
-						END AS F200_ID,
-                        CASE 
-						   WHEN ISNULL(JSON_VALUE(orden_obj_origen, '$.clientProfileData.document'), '') = ''  
-						  THEN JSON_VALUE(orden_obj_origen, '$.clientProfileData.corporateDocument')
-						  ELSE JSON_VALUE(orden_obj_origen, '$.clientProfileData.document') 
-						END AS F200_NIT,
-                        CASE
-						  WHEN ISNULL(JSON_VALUE(orden_obj_origen, '$.clientProfileData.corporateDocument'), '') <> '' THEN 'N'
-						  WHEN JSON_VALUE(orden_obj_origen, '$.clientProfileData.documentType') IN ('cedulaCOL', 'CC') THEN 'C'
-						  WHEN ISNULL(JSON_VALUE(orden_obj_origen, '$.clientProfileData.documentType'), '') = '' THEN 'C'
-						  WHEN JSON_VALUE(orden_obj_origen, '$.clientProfileData.documentType') IN ('cedula-de-extranjeria', 'CE') THEN 'E'
-						  WHEN JSON_VALUE(orden_obj_origen, '$.clientProfileData.documentType') = 'pasaporte' THEN 'P'
-						  ELSE 'O'
-						END AS F200_ID_TIPO_IDENT,
-						CASE 
-						  WHEN ISNULL(JSON_VALUE(orden_obj_origen, '$.clientProfileData.corporateDocument'), '') = '' THEN '1' 
-						  ELSE '2' 
-						END AS F200_IND_TIPO_TERCERO,
-						CASE 
-						  WHEN ISNULL(JSON_VALUE(orden_obj_origen, '$.clientProfileData.corporateDocument'), '') = '' 
-						  THEN '' 
-						  ELSE UPPER(CONCAT(JSON_VALUE(orden_obj_origen, '$.clientProfileData.lastName'), ' ', JSON_VALUE(orden_obj_origen, '$.clientProfileData.firstName'))) 
-						END AS F200_RAZON_SOCIAL,
+    endpoint            =   @endpoint,
+    id_estado           =   2,
+    intentos            =   0,
+    fecha_creacion      =   GETDATE(),
+    orden_obj_destino   =   
+        JSON_QUERY(
+            (
+                SELECT
+                    -- Nodo Terceros
+                    JSON_QUERY(
+                        (
+                            SELECT
+                                F200_ID                 =   id_cliente,
+                                F200_NIT                =   id_cliente,
+                                F200_ID_TIPO_IDENT      =   id_tipo_identificacion,
+                                F200_IND_TIPO_TERCERO   =   ind_tipo_tercero,
+                                F200_RAZON_SOCIAL       =   razon_social
+                            FROM (
+                                SELECT 
+                                    id_cliente = 
+                                        CASE 
+                                            WHEN 
+                                                ISNULL(
+                                                    JSON_VALUE(orden_obj_origen, '$.clientProfileData.document')
+                                                    , ''
+                                                ) = ''  
+                                                THEN JSON_VALUE(orden_obj_origen, '$.clientProfileData.corporateDocument')
+                                            ELSE JSON_VALUE(orden_obj_origen, '$.clientProfileData.document') 
+						                END,
+                                    id_tipo_identificacion =
+                                        CASE
+                                            WHEN 
+                                                ISNULL(
+                                                    JSON_VALUE(orden_obj_origen, '$.clientProfileData.corporateDocument')
+                                                    , ''
+                                                ) <> ''
+                                                THEN 'N'
+                                            WHEN 
+                                                JSON_VALUE(orden_obj_origen, '$.clientProfileData.documentType') IN ('cedulaCOL', 'CC')
+                                                THEN 'C'
+                                            WHEN 
+                                                ISNULL(
+                                                    JSON_VALUE(orden_obj_origen, '$.clientProfileData.documentType')
+                                                    , ''
+                                                ) = ''
+                                                THEN 'C'
+                                            WHEN 
+                                                JSON_VALUE(orden_obj_origen, '$.clientProfileData.documentType') IN ('cedula-de-extranjeria', 'CE') 
+                                                THEN 'E'
+                                            WHEN 
+                                                JSON_VALUE(orden_obj_origen, '$.clientProfileData.documentType') = 'pasaporte' 
+                                                THEN 'P'
+                                            ELSE 'O'
+						                END,
+                                    ind_tipo_tercero =
+                                        CASE 
+                                            WHEN 
+                                                ISNULL(
+                                                    JSON_VALUE(orden_obj_origen, '$.clientProfileData.corporateDocument')
+                                                    , ''
+                                                ) = '' 
+                                                THEN '1' 
+                                            ELSE '2' 
+						                END,
+                                    razon_social =
+                                        CASE
+                                            WHEN 
+                                                ISNULL(
+                                                    JSON_VALUE(orden_obj_origen, '$.clientProfileData.corporateDocument')
+                                                    , ''
+                                                ) = '' 
+                                                THEN '' 
+						                    ELSE 
+                                                UPPER(
+                                                    CONCAT(
+                                                        JSON_VALUE(orden_obj_origen, '$.clientProfileData.lastName')
+                                                        , ' '
+                                                        , JSON_VALUE(orden_obj_origen, '$.clientProfileData.firstName')
+                                                    )
+                                                ) 
+						                END,
                         LTRIM(RTRIM(SUBSTRING(
 							CASE 
 							        WHEN CHARINDEX(' ', LTRIM(RTRIM(UPPER(JSON_VALUE(orden_obj_origen, '$.clientProfileData.lastName'))))) > 0

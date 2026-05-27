@@ -1,252 +1,555 @@
+
 SET XACT_ABORT ON;
-DECLARE @json VARCHAR(MAX) = '';
-DECLARE @final table (idDocumento int,indicaParalelismo bit,descripcion varchar(100),idOrden varchar(50),json varchar(max))
-DECLARE @TmpError table (indicaError int,idDocumento int, indicaParalelismo bit, descripcionError varchar(max),idOrden varchar(50))
-DECLARE @idDocumento INT = 227666,
-        @indicaParalelismo BIT = 0,
-		@descripcion varchar(100) = 'Pedidos De Venta'
-DECLARE @counter INT = 1;
-DECLARE @total INT;
-DECLARE @order varchar(30)
-DECLARE @tmpDescuento table ([row] int,amount nvarchar(20))
-DECLARE @paymentType NVARCHAR(MAX)
-DECLARE @paymentValue NVARCHAR(MAX)
+BEGIN TRY
+	/*
+		*	Definición de tabla de resultados
+	*/
+	DECLARE @final	TABLE (
+		idDocumento			INT,
+		indicaParalelismo	BIT,
+		descripcion			VARCHAR(50),
+		idOrden				VARCHAR(50),
+		json				VARCHAR(MAX)
+	);
 
-DECLARE	@conexion	            VARCHAR(max)
-		,@bd		            VARCHAR(100)
+	/*
+		*	Definición de información del conector: ID del documento, descripción y si indica paralelismo:
+		*		ID del documento: Consultar en Connekta el Id del Conector.
+		*		Descripción: Nombre del conector
+		*		Indica paralelismo: 1 = Sí, 0 = No, dependiendo si el conector soporta múltiples hilos de ejecución.
+	*/
+	DECLARE	@idDocumento			INT			=	'227666',
+			@descripcionConector	VARCHAR(50)	=	'Pedidos De Venta',
+			@indicaParalelismo		BIT			=	0;
 
+--->================================================================================================================<---
 
-SELECT TOP 1 
-	@conexion   =   cadena_conexion
-	,@bd        =   base_datos 
-FROM conexiones
+	/*
+		*	Configuración de ejecución del script
+	*/
+	DECLARE @batch_size	INT	=   25;	--	*	Cuantas órdenes se traen por petición
 
-begin try
+	/*
+		*	Origen de los datos del cliente/tercero
+		*		1 = Desde la sección Customer
+		*		2 = Desde la sección Billing Address
+		*		3 = Desde la sección Customer y si no existe, desde Billing Address
+		*		4 = Desde la sección Billing Address y si no existe, desde Customer
+		*	
+		*	Nota: Debe dejarse igual que lo que se coloque en la consulta de terceros.
+	*/
+	DECLARE @client_origin_data	INT	=	4;
+	
+	DECLARE @path_customer	NVARCHAR(100)	=	'$.customer.default_address';
+	DECLARE @path_billing	NVARCHAR(100)	=	'$.billing_address';
 
-IF OBJECT_ID('tempdb..##tmp_OrdenesCreadas_natura') IS NOT NULL 
-    DROP TABLE ##tmp_OrdenesCreadas_natura;
+	DECLARE @id_cliente_ocasional	NVARCHAR(100)	=	'';
 
-CREATE TABLE ##tmp_OrdenesCreadas_natura
-(
-    f430_referencia VARCHAR(50)
-);
+	DECLARE @id_referencia_flete	NVARCHAR(50)	=	'0001547';
 
-INSERT INTO ##tmp_OrdenesCreadas_natura (f430_referencia)
-EXEC('
-    SELECT
-        DISTINCT f430_referencia
-    FROM OPENROWSET(
-        ''SQLNCLI''
-        ,''' + @conexion + '''
-        ,
-        ''
+	DECLARE @id_tipo_docto_erp		NVARCHAR(3)		=	'PDV';
+
+	DECLARE @num_dias_entrega	INT	=	1;
+
+--->================================================================================================================<---
+	/*
+		*	Tablas con datos del ERP
+	*/
+	DECLARE @t430_cm_pv_docto	TABLE
+	(
+		f430_num_docto_referencia	NVARCHAR(15)
+	);
+
+    /*
+		*	Definición de la tabla de terceros del ERP
+	*/
+    DECLARE	@terceros_clientes_ERP	TABLE (
+        f200_id			NVARCHAR(50),
+        f015_id_pais    NVARCHAR(3)
+    );
+
+--->================================================================================================================<---
+	/*
+		*	Consultar datos en el ERP
+	*/
+	DECLARE @conexion	NVARCHAR(MAX);
+    DECLARE @base_datos	NVARCHAR(MAX);
+
+	SELECT
+		@conexion	=	cadena_conexion,
+		@base_datos	=	base_datos
+	FROM Conexiones;
+
+	/*
+		*	Consultar pedidos existentes
+	*/
+	INSERT INTO @t430_cm_pv_docto
+    EXEC('
+        SELECT DISTINCT
+			f430_num_docto_referencia
+        FROM OPENROWSET(
+            ''SQLNCLI'',
+            ''' + @conexion + ''',
+            ''
+				SELECT
+					f430_num_docto_referencia	=	TRIM(f430_num_docto_referencia)
+				FROM ' + @base_datos + '.dbo.t430_cm_pv_docto
+				WHERE 
+					f430_ind_estado != 9
+           			AND 
+					f430_id_cia = 3
+					AND
+					f430_num_docto_referencia IS NOT NULL
+					AND
+					f430_id_tipo_docto	=	'''''+ @id_tipo_docto_erp +'''''
+			''
+        )
+    ');
+
+	/*
+        *   Valida si el tercero del pedido existe, y si tiene el id del pais
+    */
+    INSERT INTO @terceros_clientes_ERP
+    EXEC('
+        SELECT DISTINCT
+            f200_id,
+            f015_id_pais
+        FROM OPENROWSET(
+            ''SQLNCLI''
+            ,''' + @conexion + '''
+            ,''
+                SELECT
+                    f200_id,
+                    f015_id_pais
+                FROM '+@base_datos + '.dbo.t200_mm_terceros
+                    INNER JOIN '+@base_datos + '.dbo.t201_mm_clientes
+                        ON
+                            f200_rowid  =   f201_rowid_tercero
+                    INNER JOIN '+@base_datos + '.dbo.t015_mm_contactos
+                        ON
+                            f015_rowid  =   f201_rowid_contacto
+            ''
+        )
+    ');
+
+--->================================================================================================================<---
+
+	/*
+		*	Definición de la sección de pedidos del conector
+	*/
+	DECLARE @pedidos	TABLE (
+		f430_fecha_entrega          NVARCHAR(8),
+		f430_id_fecha               NVARCHAR(8),
+		f430_id_tercero_fact        NVARCHAR(15),
+		f430_id_tercero_rem         NVARCHAR(15),
+		f430_notas                  NVARCHAR(2000),
+        f430_num_docto_referencia   NVARCHAR(15),
+        f430_fecha_entrega_min      NVARCHAR(8),
+        f430_fecha_entrega_max      NVARCHAR(8)
+	);
+
+	/*
+		*	Definición de la sección de movimientos pedidos comercial del conector
+	*/
+	DECLARE @movto_pedidos_comercial	TABLE (
+		line_item_id			BIGINT,
+		f431_cant_pedida_base   NVARCHAR(20),
+		f431_codigo_barras      NVARCHAR(20),
+		f431_referencia_item	NVARCHAR(50),
+		f431_fecha_entrega      NVARCHAR(8),
+		f431_notas              NVARCHAR(255),
+		f431_nro_registro       NVARCHAR(10),
+		f431_precio_unitario    NVARCHAR(20)
+	);
+
+	/*
+		*	Definición de la sección de descuentos del conector
+	*/
+	DECLARE @descuentos	TABLE (
+		f431_nro_registro	NVARCHAR(10),
+		f432_vlr_uni		NVARCHAR(20)
+	);
+
+--->================================================================================================================<---
+
+    DECLARE @line_items TABLE
+    (
+        id                      NVARCHAR(20),
+        price                   NVARCHAR(20),
+        quantity                NVARCHAR(20),
+        barcode                 NVARCHAR(20),
+        discount_amount         NVARCHAR(MAX)
+    );
+	
+--->================================================================================================================<---
+
+    /*
+        *   Actualizar a estado 3 pedidos ya existentes
+    */
+    UPDATE ord
+    SET id_estado = 3
+    FROM [ordenes] AS ord
+        INNER JOIN @t430_cm_pv_docto
+            ON
+                f430_num_docto_referencia   =   id_orden
+    WHERE
+        id_estado = 2;
+    
+    /*
+        *   Actualizar a estado 2 pedidos aún no existentes pero que aparece como que ya existieran
+    */
+    UPDATE ord
+    SET id_estado = 2
+    FROM [ordenes] AS ord
+        LEFT JOIN @t430_cm_pv_docto
+            ON
+                f430_num_docto_referencia   =   id_orden
+    WHERE
+        id_estado   IN	(3, 4)
+        AND
+        f430_num_docto_referencia   IS NULL;
+
+	DECLARE @ordenes TABLE (
+		id_orden	NVARCHAR(20),
+		orden_obj	NVARCHAR(MAX)
+	);
+
+	/*
+		*	Obtener órdenes pendientes de procesamiento que se encuentran en estado 2 y 
+		*	tienen menos de 3 intentos de procesamiento
+	*/
+	INSERT INTO @ordenes (id_orden, orden_obj)
+	SELECT TOP (@batch_size)
+		id_orden, 
+		orden_obj
+	FROM ordenes
+		LEFT JOIN @t430_cm_pv_docto
+			ON
+				f430_num_docto_referencia	=	id_orden
+	WHERE 
+		id_estado	=	2
+		AND
+		intentos	<=	3
+		AND
+		f430_num_docto_referencia	IS NULL
+	ORDER BY ID DESC;
+
+--->================================================================================================================<---
+
+	/*
+		*	Definición de variables para el procesamiento de las órdenes
+	*/
+	DECLARE @order		NVARCHAR(30);
+	DECLARE @json		NVARCHAR(MAX)	= 	'';
+	DECLARE @total		INT	=	(SELECT COUNT(*) FROM @ordenes);	--	*	Total de órdenes a procesar
+	DECLARE @counter	INT	=	1;									--	*	Contador de órdenes procesadas
+
+	WHILE @counter <= @total
+	BEGIN
+		BEGIN TRY
+			/*
+				*	Obtener el JSON de la orden actual
+			*/
+			SET @json	=	(
+				SELECT
+					orden_obj
+				FROM (
+					SELECT 
+						orden_obj, 
+						ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS rn
+					FROM @ordenes
+				) AS temp
+				WHERE
+					rn = @counter
+			);
+
+			SET @order	=	JSON_VALUE(@json, '$.name');	--	*	Obtener el número de la orden
+
+			DECLARE @id_cliente NVARCHAR(100) =
+				CASE @client_origin_data
+					WHEN 1 
+						THEN 
+							NULLIF(
+								TRIM(
+									JSON_VALUE(@json, @path_customer + '.company')
+								)
+								, ''
+							)
+					WHEN 2 
+						THEN 
+							NULLIF(
+								TRIM(
+									JSON_VALUE(@json, @path_billing  + '.company')
+								)
+								, ''
+							)
+					WHEN 3 
+						THEN 
+							COALESCE(
+								NULLIF(
+									TRIM(
+										JSON_VALUE(@json, @path_customer + '.company')
+									)
+									, ''
+								),
+								NULLIF(
+									TRIM(
+										JSON_VALUE(@json, @path_billing  + '.company')
+									)
+									, ''
+								)
+							)
+					WHEN 4 
+						THEN 
+							COALESCE(
+								NULLIF(
+									TRIM(
+										JSON_VALUE(@json, @path_billing  + '.company')
+									)
+									, ''
+								),
+								NULLIF(
+									TRIM(
+										JSON_VALUE(@json, @path_customer + '.company')
+									)
+									, ''
+								)
+							)
+				END;
+			
+			SET @id_cliente	=	
+				ISNULL(
+					NULLIF(
+						TRIM(
+							@id_cliente
+						),
+						''
+					), 
+					@id_cliente_ocasional
+				);
+
+			DECLARE @id_fecha       VARCHAR(8)  =   
+						FORMAT(
+							CAST(
+								JSON_VALUE(@json, '$.updated_at') AS DATE
+							),
+							'yyyyMMdd'
+						),
+                    @fecha_entrega  VARCHAR(10) =   
+						FORMAT(
+							DATEADD(
+								DAY,
+								@num_dias_entrega,
+								CAST(
+									JSON_VALUE(@json, '$.updated_at') AS DATE
+								)
+							),
+							'yyyyMMdd'
+						);
+			
+			DECLARE @notas	NVARCHAR(2000)	=	NULL;
+			
+			--validar metodos de pago
+			SELECT TOP 1
+				@notas	=	JSON_VALUE(transaccion_obj, '$.gateway')
+			FROM transacciones_ordenes
+			WHERE
+				id_orden	=	JSON_VALUE(@json, '$.id')
+				AND
+				JSON_VALUE(transaccion_obj, '$.status')	=	'success';
+
+--->================================================================================================================<---
+
+			INSERT INTO @pedidos
+			(
+				f430_fecha_entrega,
+				f430_id_fecha,
+				f430_id_tercero_fact,
+				f430_id_tercero_rem,
+				f430_notas,
+    		    f430_num_docto_referencia,
+				f430_fecha_entrega_min,
+				f430_fecha_entrega_max
+			)
+			SELECT
+				f430_fecha_entrega			=	@fecha_entrega,
+				f430_id_fecha               =	@id_fecha,
+				f430_id_tercero_fact        =	@id_cliente,
+				f430_id_tercero_rem         =	@id_cliente,
+				f430_notas                  =	@notas,
+    		    f430_num_docto_referencia   =	@order,
+				f430_fecha_entrega_min		=	@id_fecha,
+				f430_fecha_entrega_max		=	@fecha_entrega;
+				
+--->================================================================================================================<---
+
+			INSERT INTO @line_items
+            (
+                id,
+                price,
+                quantity,
+                barcode,
+                discount_amount
+            )
+            SELECT
+                id                      =   JSON_VALUE(LI.value, '$.id'),
+                price                   =   JSON_VALUE(LI.value, '$.price_set.presentment_money.amount'),
+                quantity                =   JSON_VALUE(LI.value, '$.quantity'),
+                barcode                 =   JSON_VALUE(variante_obj, '$.barcode'),
+                discount_amount         =
+                    (
+                        SELECT
+                            amount          =   
+                                SUM(
+                                    CAST(
+                                        JSON_VALUE(DA.value, '$.amount') AS DECIMAL(10,4)
+                                    )
+                                ) / CAST(
+                                    JSON_VALUE(LI.value, '$.quantity') AS INT
+                                )
+                        FROM OPENJSON(LI.VALUE, '$.discount_allocations') AS DA
+                    )
+            FROM OPENJSON(@json,'$.line_items') AS LI
+				LEFT JOIN	variantes	
+					ON	
+						JSON_VALUE(LI.value, '$.variant_id')	=	id_variante;
+
+--->================================================================================================================<---
+			/*
+	        	*	Inserción sección de movimientos pedidos comercial
+	        */
+            INSERT INTO @Movto_Pedidos_comercial
+            (
+				line_item_id,
+				f431_cant_pedida_base,
+				f431_codigo_barras,
+				f431_referencia_item,
+				f431_fecha_entrega,
+				f431_notas,
+				f431_nro_registro,
+				f431_precio_unitario
+            )
+            SELECT
+                line_item_id			=   id,
+                f431_cant_pedida_base   =   quantity,
+				f431_codigo_barras		=	barcode,
+				f431_referencia_item	=	'',
+                f431_fecha_entrega      =   @fecha_entrega,
+				f431_notas				=	@notas,
+                f431_nro_registro       =   ROW_NUMBER() OVER (ORDER BY id),
+                f431_precio_unitario    =   price
+            FROM @line_items;
+
+			INSERT INTO @Movto_Pedidos_comercial
+            (
+                line_item_id,
+				f431_cant_pedida_base,
+				f431_codigo_barras,
+				f431_referencia_item,
+				f431_fecha_entrega,
+				f431_notas,
+				f431_nro_registro,
+				f431_precio_unitario
+            )
+            SELECT
+                line_item_id			=   0,
+                f431_cant_pedida_base	=   1,
+                f431_codigo_barras		=   '',
+                f431_referencia_item    =   @id_referencia_flete,
+                f431_fecha_entrega      =   @fecha_entrega,
+				f431_notas				=	'',
+				f431_nro_registro		=	0,
+                f431_precio_unitario    =   JSON_VALUE(SL.value, '$.price')
+            FROM OPENJSON(@json, '$.shipping_lines') AS SL
+            WHERE
+                CAST(JSON_VALUE(SL.value, '$.price') AS DECIMAL(10,4)) > 0
+
+	        /*
+	        	*	Inserción sección de descuentos
+	        */
+            INSERT INTO @Descuentos
+            (
+                f431_nro_registro,
+                f432_vlr_uni
+            )
+            SELECT
+                f431_nro_registro   =   MPC.f431_nro_registro,
+                f432_vlr_uni        =   CAST(LI.discount_amount AS DECIMAL(10,4))
+            FROM @Movto_Pedidos_comercial AS MPC
+                INNER JOIN @line_items AS LI
+                    ON
+                        LI.id   =   MPC.line_item_id
+            WHERE
+                LI.discount_amount  IS NOT NULL
+                AND 
+                CAST(LI.discount_amount AS DECIMAL) >   0
+                AND
+                CAST(LI.discount_amount AS DECIMAL) !=  CAST(LI.price AS DECIMAL);
+
+			INSERT INTO @final(
+				idDocumento,
+				descripcion,
+				indicaParalelismo,
+				idOrden,
+				json
+			)
 			SELECT 
-				f430_referencia
-			FROM ' + @bd + '.dbo.t430_cm_pv_docto
+				@idDocumento,
+				@descripcionConector,
+				@indicaParalelismo,
+				@order as idOrden,
+				(
+					SELECT
+						[Pedidos] = (
+							SELECT *
+							FROM @pedidos
+							FOR JSON PATH,
+							INCLUDE_NULL_VALUES
+						),
+						[Movimiento] = (
+							SELECT *
+							FROM @movto_pedidos_comercial
+							FOR JSON PATH,
+							INCLUDE_NULL_VALUES
+						),
+						[Descuentos] = (
+							SELECT *
+							FROM @descuentos
+							FOR JSON PATH,
+							INCLUDE_NULL_VALUES
+						)
+					FOR JSON PATH,
+					WITHOUT_ARRAY_WRAPPER
+				);
+
+			SET @counter = @counter + 1;
+		END TRY
+		BEGIN CATCH
+			--	*	Registrar el error en la orden y continuar con la siguiente
+			UPDATE ordenes
+			SET 
+				intentos	=	intentos + 1
 			WHERE 
-				f430_ind_estado <> 9
-				AND f430_id_cia = 1
-        ''
-    )
-')
+				id_orden	=	@order;
+		END CATCH;
 
-IF OBJECT_ID('tempdb..##tmp_Items2') IS NOT NULL 
-    DROP TABLE ##tmp_Items2;
+		DELETE @pedidos;
+		DELETE @line_items;
+		DELETE @movto_pedidos_comercial;
+		DELETE @descuentos;
 
-CREATE TABLE ##tmp_Items2
-(
-    barcodeTemp VARCHAR(50)
-);
+		SET @counter = @counter + 1;
+	END
 
-INSERT INTO ##tmp_Items2 (barcodeTemp)
-EXEC('
-    SELECT
-        f131_id as barcodeTemp
-    FROM OPENROWSET(
-        ''SQLNCLI''
-        ,''' + @conexion + '''
-        ,
-        ''
-			SELECT 
-				CIB.f131_id
-			FROM ' + @bd + '.dbo.t120_mc_items a
-				INNER JOIN ' + @bd + '.dbo.t121_mc_items_extensiones b ON a.f120_rowid = b.f121_rowid_item
-				INNER JOIN ' + @bd + '.dbo.t131_mc_items_barras CIB ON b.f121_rowid = CIB.f131_rowid_item_ext
-        ''
-    )
-')
-
-SELECT id_orden, orden_obj
-INTO #ordenes
-FROM ordenes o
-LEFT JOIN ##tmp_OrdenesCreadas_natura oc 
-    ON oc.f430_referencia = REPLACE(o.id_orden, '"', '')
-WHERE id > 1020
-AND id_estado = 2
-AND intentos <= 3
-
-
-SET @total = (SELECT COUNT(*) FROM #ordenes);
-WHILE @counter <= @total
-BEGIN
-    SET @json = (
-        SELECT orden_obj
-        FROM (
-            SELECT orden_obj ,row_number() over (order by (select null)) as rn
-            FROM #ordenes
-        ) AS temp
-		 where rn = @counter);
-
-    SET @order = JSON_VALUE(@json, '$.name')
-
---validar metodos de pago
-	SELECT TOP 1
-		@paymentType = [value],
-		@paymentValue = CASE 
-			WHEN value = 'ePayco' THEN '003'
-			ELSE '000' 
-		END
-	FROM OPENJSON(@json, '$.payment_gateway_names') as payment
-	WHERE [value] != 'gift_card'
-	ORDER BY [key] desc
-
- --encabezado
-select 
-	FORMAT(GETDATE(), 'yyyyMMdd')										as f430_id_fecha
-	,isnull(
-		JSON_VALUE(@json, '$.billing_address.company'),
-		JSON_VALUE(@json, '$.customer.default_address.company'))	as f430_id_tercero_fact
-	,isnull(
-		JSON_VALUE(@json, '$.billing_address.company'),
-		JSON_VALUE(@json, '$.customer.default_address.company'))	as f430_id_tercero_rem
-	,FORMAT(GETDATE(), 'yyyyMMdd')										as f430_fecha_entrega
-	,JSON_VALUE(@json, '$.id')									as f430_num_docto_referencia
-	,@paymentType														as f430_notas
-	,'53153993'															as f430_id_tercero_vendedor	
-	,FORMAT(GETDATE(), 'yyyyMMdd')										as f430_fecha_entrega_min
-	,FORMAT(GETDATE(), 'yyyyMMdd')										as f430_fecha_entrega_max
-INTO #pedidos
-
---movimiento
-SELECT
-    t.barcodeTemp								as f431_codigo_barras
-    ,FORMAT(GETDATE(), 'yyyyMMdd')				as f431_fecha_entrega
-    ,JSON_VALUE(LineItems.value, '$.quantity')	as f431_cant_pedida_base
-	,@paymentType as f431_notas
-INTO #movimientos
-FROM OPENJSON(@json, '$.line_items') AS LineItems
-	INNER JOIN variantes v ON v.id_variante = JSON_VALUE(LineItems.value, '$.variant_id')
-	INNER JOIN ##tmp_Items2 t ON t.barcodeTemp = JSON_VALUE(v.variante_obj, '$.barcode')
-ORDER BY JSON_VALUE(LineItems.value, '$.id');
-
---Actuiza el inventario
-/*
-UPDATE Inv
-SET Inv.sincronizado = 0
-FROM Inventarios Inv
-INNER JOIN  OPENJSON(@json, '$.line_items') AS  LineItems ON Inv.id_variante   =   JSON_VALUE(LineItems.value, '$.variant_id');
-*/
-
--- valida si tiene envio
-SELECT JSON_VALUE(ShippingLines.value, '$.discount_allocations[0].amount') as amount
-INTO #Shipping_lines
-FROM OPENJSON(@json,'$.shipping_lines') AS ShippingLines
-
-if not exists (SELECT amount FROM #Shipping_lines WHERE amount is not null)
-begin
-    INSERT INTO #movimientos (
-        f431_codigo_barras,
-        f431_fecha_entrega,
-        f431_cant_pedida_base,
-		f431_notas
-    )
-    SELECT
-        0,
-        FORMAT(GETDATE(),'yyyyMMdd'),
-        1,
-		''
-    FROM OPENJSON(@json,'$.shipping_lines') AS sl
-    WHERE JSON_VALUE(sl.value,'$.price') NOT IN ('0.00','0')
-      AND JSON_VALUE(sl.value,'$.is_removed') = 'false';
-end
-
---valida el descuento
-if exists (SELECT value FROM OPENJSON(@json,'$.discount_applications'))
-begin
-SELECT * ,@json as json
-into #descuentostemp
-FROM OPENJSON(@json) WITH (
-    discount_applications nvarchar(max) '$.discount_applications[0].type',
-	[value] nvarchar(5) '$.discount_applications[0].value',
-	[name] varchar(10) '$.name',
-	[target_type] varchar(50) '$.discount_applications[0].target_type',
-	[value_type] varchar(50) '$.discount_applications[0].value_type'
-) AS c1
-
---valida descuento por linea
-if exists (select top 1 target_type from #descuentostemp where target_type='line_item')
-begin
-insert into @tmpDescuento
-SELECT  ROW_NUMBER() OVER (ORDER BY (JSON_VALUE(LineItems.value, '$.id'))) as f431_nro_registro,
-		convert(money,JSON_VALUE(Discount.value, '$.amount'))/convert(money,JSON_VALUE(LineItems.value, '$.quantity'))  as f432_vlr_uni
-	FROM OPENJSON(@json, '$.line_items') AS LineItems
-    CROSS APPLY OPENJSON(LineItems.value, '$.discount_allocations') AS Discount
-end
-
-end --termina descuento
-
-insert into @final(idDocumento,indicaParalelismo,descripcion,idOrden,json)
-select @idDocumento,@indicaParalelismo, @descripcion,@order as idOrden,(
-SELECT
-    [Pedidos] = (
-        SELECT *
-        FROM #pedidos
-        FOR JSON PATH
-    ),
-    [Movimiento] = (
-        SELECT *
-        FROM #movimientos
-        FOR JSON PATH
-    ),
-    [Descuentos] = (
-        SELECT [row] as f431_nro_registro,
-		amount as f432_vlr_uni
-        FROM @tmpDescuento
-       FOR JSON PATH
-  )
-FOR JSON PATH,WITHOUT_ARRAY_WRAPPER);
-
- delete @tmpDescuento
-IF OBJECT_ID('tempdb..#descuentostemp') IS NOT NULL DROP TABLE #descuentostemp;
-IF OBJECT_ID('tempdb..#pedidos') IS NOT NULL DROP TABLE #pedidos;
-IF OBJECT_ID('tempdb..#movimientos') IS NOT NULL DROP TABLE #movimientos;
-IF OBJECT_ID('tempdb..#descuentos') IS NOT NULL DROP TABLE #descuentos;
-IF OBJECT_ID('tempdb..#tmpDescuento') IS NOT NULL DROP TABLE #tmpDescuento;
-IF OBJECT_ID('tempdb..#Shipping_lines') IS NOT NULL DROP TABLE #Shipping_lines;
-IF OBJECT_ID('tempdb..##tmp_PreciosErp') IS NOT NULL DROP TABLE ##tmp_PreciosErp;
-
-SET @counter = @counter + 1;
-end
-end try
-begin catch
-insert into @TmpError
-select 1 as indicaError, 0 as idDocumento,0 as indicaParalelismo, ERROR_MESSAGE() as descripcionError,@order as idOrden
-
-goto Cleanup;
-end catch
-Cleanup:
-begin
-IF OBJECT_ID('tempdb..#descuentostemp') IS NOT NULL DROP TABLE #descuentostemp;
-IF OBJECT_ID('tempdb..#pedidos') IS NOT NULL DROP TABLE #pedidos;
-IF OBJECT_ID('tempdb..#movimientos') IS NOT NULL DROP TABLE #movimientos;
-IF OBJECT_ID('tempdb..#descuentos') IS NOT NULL DROP TABLE #descuentos;
-IF OBJECT_ID('tempdb..#tmpDescuento') IS NOT NULL DROP TABLE #tmpDescuento;
-IF OBJECT_ID('tempdb..#Shipping_lines') IS NOT NULL DROP TABLE #Shipping_lines;
-IF OBJECT_ID('tempdb..##tmp_PreciosErp') IS NOT NULL DROP TABLE ##tmp_PreciosErp;
-IF OBJECT_ID('tempdb..##tmp_OrdenesCreadas_natura') IS NOT NULL DROP TABLE ##tmp_OrdenesCreadas_natura;
-IF OBJECT_ID('tempdb..##tmp_Items2') IS NOT NULL DROP TABLE ##tmp_Items2;
-IF OBJECT_ID('tempdb..#ordenes') IS NOT NULL DROP TABLE #ordenes;
-end
-
-SELECT * from @final AS final_json; 
-select * from @TmpError
+    SELECT * 
+    FROM    @final AS final_json;
+END TRY
+BEGIN CATCH
+    SELECT 
+        ERROR_NUMBER()		AS	ErrorNumber,
+        ERROR_SEVERITY()	AS	ErrorSeverity,
+        ERROR_STATE()		AS	ErrorState,
+        ERROR_PROCEDURE()	AS	ErrorProcedure,
+        ERROR_LINE()		AS	ErrorLine,
+        ERROR_MESSAGE()		AS	ErrorMessage;
+END CATCH;

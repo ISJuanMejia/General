@@ -90,6 +90,45 @@ BEGIN
                 dbo.fn_RemoveAccentMarks(LOWER(f013_descripcion)) = 'managua'
             )
             OR
+            -- Caso 6: Panamá – Panamá
+            (
+                dbo.fn_RemoveAccentMarks(LOWER(@pais_shopify)) = 'panama'
+                AND 
+                (
+                    dbo.fn_RemoveAccentMarks(LOWER(@dpto_shopify)) LIKE '%panama%'
+                    OR
+                    @dpto_shopify IS NULL
+                )
+                AND 
+                dbo.fn_RemoveAccentMarks(LOWER(@ciudad_shopify)) LIKE '%panama%'
+                AND 
+                dbo.fn_RemoveAccentMarks(LOWER(f011_descripcion)) = 'panama'
+                AND 
+                dbo.fn_RemoveAccentMarks(LOWER(f012_descripcion)) = 'ciudad de panama'
+                AND 
+                dbo.fn_RemoveAccentMarks(LOWER(f013_descripcion)) = 'ciudad de panama'
+            )
+            OR
+            -- Caso 7: Estados Unidos
+            -- (
+            --     dbo.fn_RemoveAccentMarks(LOWER(@pais_shopify)) = 'united states'
+            --     -- Caso 7.1: Florida
+            --     AND 
+            --     (
+            --         dbo.fn_RemoveAccentMarks(LOWER(@dpto_shopify)) LIKE '%panama%'
+            --         OR
+            --         @dpto_shopify IS NULL
+            --     )
+            --     AND 
+            --     dbo.fn_RemoveAccentMarks(LOWER(@ciudad_shopify)) LIKE '%panama%'
+            --     AND 
+            --     dbo.fn_RemoveAccentMarks(LOWER(f011_descripcion)) = 'panama'
+            --     AND 
+            --     dbo.fn_RemoveAccentMarks(LOWER(f012_descripcion)) = 'ciudad de panama'
+            --     AND 
+            --     dbo.fn_RemoveAccentMarks(LOWER(f013_descripcion)) = 'ciudad de panama'
+            -- )
+            -- OR
             -- Caso 6: Caso general
             (
                 dbo.fn_RemoveAccentMarks(LOWER(f012_descripcion)) = @dpto_shopify
@@ -125,7 +164,18 @@ BEGIN
                 )
             )
         );
+    
+    IF NOT EXISTS (SELECT 1 FROM @result)
+    BEGIN
+        INSERT INTO @result
+        SELECT
+            id_pais_erp     =   @id_pais_defecto,
+            id_dptos_erp    =   @id_dpto_defecto,
+            id_ciudad_erp   =   @id_ciudad_defecto
+
+        RETURN;
+    END
 
     RETURN;
-END;
+END
 GO

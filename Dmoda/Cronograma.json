@@ -1,0 +1,57 @@
+{
+    "Catalogo_crea_sku": {
+        "Horas": 4,
+        "Dependiente": false,
+        "Estado": "En desarrollo",
+        "Fecha_entrega": "2026-04-24",
+        "Responsable": "Gabriel Rojas"
+    },
+    "Catalogo_crea_especificaciones_sku": {
+        "Horas": 4,
+        "Dependiente": false,
+        "Estado": "En desarrollo",
+        "Fecha_entrega": "2026-04-24",
+        "Responsable": "Gabriel Rojas"
+    },
+    "Actualizacion_Inventarios": {
+        "Horas": 4,
+        "Dependiente": 
+        [
+            {
+                "Tarea": "Catalogo_crea_productos",
+                "Estado": "Finalizado"
+            }, 
+            {
+                "Tarea": "Catalogo_crea_especificaciones_productos",
+                "Estado": "Finalizado"
+            }, 
+            {
+                "Tarea": "Catalogo_crea_sku",
+                "Estado": "En desarrollo"
+            }, 
+            {
+                "Tarea": "Catalogo_crea_especificaciones_sku",
+                "Estado": "En desarrollo"
+            }
+        ],
+        "Estado": "Pendiente",
+        "Fecha_inicio": "2026-04-22",
+        "Fecha_entrega": "2026-04-30",
+        "Responsable": "Diana Lopez"
+    },
+    "Actualizacion_Precios": {
+        "Horas": 4,
+        "Dependiente": 
+        [
+            "Catalogo_crea_productos", 
+            "Catalogo_crea_especificaciones_productos", 
+            "Catalogo_crea_sku", 
+            "Catalogo_crea_especificaciones_sku"
+        ],
+        "Estado": "Pendiente",
+        "Fecha_inicio": "2026-04-22",
+        "Fecha_entrega": "2026-05-10",
+        "Nota": "Actualización desde solo una lista de precios del ERP hacía VTEX",
+        "Responsable": "Gabriel Rojas"
+    }
+}

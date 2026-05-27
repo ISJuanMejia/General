@@ -3,9 +3,9 @@ import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 
-enum QueryType { Terceros = 0, Pedidos = 1 }
-enum EcommerceType { Shopify = 0, VTEX = 1 }
-enum AppVersion { V1 = 0, V2 = 1 }
+enum QueryType { Terceros = 0, Pedidos = 1, Compromisos = 2, Facturas = 3 }
+enum EcommerceType { Shopify = 0, VTEX = 1, WooCommerce = 3 }
+enum AppVersion { GTIntegration = 0, V1 = 1, V2 = 2 }
 
 interface TaxConfig {
   tipoReg: string;
@@ -68,15 +68,15 @@ export class AppComponent implements OnInit {
   AppVersion = AppVersion;
 
   config: QueryConfiguration = {
-    clientName: 'NuevoCliente',
+    clientName: 'Nombre cliente',
     queryType: QueryType.Terceros,
     ecommerce: EcommerceType.Shopify,
-    version: AppVersion.V1,
-    idDocumento: 200000,
+    version: AppVersion.V2,
+    idDocumento: 999999,
     descripcionConector: 'Ecommerce_Terceros_Clientes',
     indicaParalelismo: true,
-    idSucursal: '001',
-    idListaPrecio: '001',
+    idSucursal: '',
+    idListaPrecio: '',
     clientOriginData: 4,
     locationOriginData: 1,
     idPaisDefecto: '169',
@@ -85,13 +85,13 @@ export class AppComponent implements OnInit {
     idTipoIdentDefecto: 'C',
     indTipoTerceroDefecto: '1',
     processClientWithoutId: false,
-    idCiiu: '0081',
+    idCiiu: '',
     taxes: [],
     dynamicEntities: [],
-    idTipoDocto: 'EPV',
-    idCo: '001',
-    idVendedor: '9999',
-    unidadMedidaItem: 'UND',
+    idTipoDocto: '',
+    idCo: '',
+    idVendedor: '',
+    unidadMedidaItem: '',
     referenciaFlete: 'FLETES',
     payments: []
   };
@@ -142,7 +142,9 @@ export class AppComponent implements OnInit {
   }
 
   generateSql() {
-    this.http.post('http://localhost:5000/api/generator/generate', this.config, { responseType: 'blob' })
+    debugger;
+    console.log(this.config);
+    this.http.post('http://localhost:7220/api/Generator/generate', null/*this.config*/, { responseType: 'blob' })
       .subscribe(blob => {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');

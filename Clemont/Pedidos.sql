@@ -1,11 +1,6 @@
-/*
-    *   VERSION FINAL CLEMONT PEDIDOS
-*/
+
 BEGIN TRY
     SET XACT_ABORT ON;
-    /*
-		*	Definición de tabla de resultados
-	*/
 	DECLARE @final	TABLE (
 		idDocumento			INT,
 		indicaParalelismo	BIT,
@@ -13,51 +8,20 @@ BEGIN TRY
 		idOrden				VARCHAR(50),
 		json				VARCHAR(MAX)
 	);
-
-    /*
-		*	Definición de información del conector: ID del documento, descripción y si indica paralelismo:
-		*		ID del documento: Consultar en Connekta el Id del Conector.
-		*		Descripción: Nombre del conector
-		*		Indica paralelismo: 1 = Sí, 0 = No, dependiendo si el conector soporta múltiples hilos de ejecución.
-	*/
 	DECLARE	@idDocumento			INT			=	'228298',
 			@descripcionConector	VARCHAR(50)	=	'Ecommerce_Pedidos_Estandar',
 			@indicaParalelismo		BIT			=	0;
-    
-    /*
-		*	Configuración de ejecución del script
-	*/
+
 	DECLARE @batch_size    INT = 25;  -- Órdenes por petición
     DECLARE @max_intentos  INT = 3;   -- Límite estricto de intentos (< no <=)
 
-    /*
-		*	Origen de los datos del cliente/tercero
-		*		1 = Desde la sección Customer
-		*		2 = Desde la sección Billing Address
-		*		3 = Desde la sección Customer y si no existe, desde Billing Address
-		*		4 = Desde la sección Billing Address y si no existe, desde Customer
-	*/
 	DECLARE @client_origin_data	INT	=	4;
 
 	DECLARE @path_customer	NVARCHAR(100)	=	'$.customer.default_address';
 	DECLARE @path_billing	NVARCHAR(100)	=	'$.billing_address';
 
-    /*
-		*	Cliente ocasional cuando el cliente no tiene cédula
-	*/
     DECLARE @id_cliente_ocasional   NVARCHAR(20)    =   '222222222';
 
-    /*
-		*	Id tipo de cliente:
-		*		C004	->	id_tipo_cliente Addi
-		*		C001	->	id_tipo_cliente Manual
-		*		C008	->	id_tipo_cliente Mercado Libre
-		*		C006	->	id_tipo_cliente Gift Card
-		*		C005	->	id_tipo_cliente Sistecredito
-		*		C009	->	id_tipo_cliente Wompi
-		*		C013	->	id_tipo_cliente Bold
-		*		C015	->	id_tipo_cliente Sumas
-	*/
 	DECLARE @id_tipo_cliente_addi           NVARCHAR(4) =   'C004',
             @id_tipo_cliente_manual         NVARCHAR(4) =   'C001',
             @id_tipo_cliente_MercadoLibre	NVARCHAR(4) =   'C008',
@@ -67,77 +31,40 @@ BEGIN TRY
             @id_tipo_cliente_Bold	        NVARCHAR(4) =   'C013',
             @id_tipo_cliente_Sumas	        NVARCHAR(4) =   'C015';
 
-    /*
-        *   Número de días de entrega
-    */
     DECLARE @num_dias_entrega   INT =   1;
 
-    /*
-        *   Vendedores
-    */
     DECLARE @id_vendedor_defecto            NVARCHAR(20)    =   '901527979',
             @id_vendedor_lorenacano         NVARCHAR(20)    =   '1000398280',
             @id_vendedor_santiagomartinez   NVARCHAR(20)    =   '1010052735';
 
-    /*
-        *   Tags a validar
-    */
     DECLARE @tag_lorenacano         NVARCHAR(20)    =   'lorenacano',
             @tag_santiagomartinez   NVARCHAR(20)    =   'santiagomartinez';
 
-    /*
-        *   Id Motivo
-        *       '01'    ->  Producto
-        *       '03'    ->  Obsequio
-    */
     DECLARE @id_motivo_producto NVARCHAR(2) =   '01',
             @id_motivo_obsequio NVARCHAR(2) =   '03';
 
-    /*
-        *   Id  Centro de Costo
-    */
     DECLARE @id_ccosto_producto NVARCHAR(5) =   '',
             @id_ccosto_obsequio NVARCHAR(5) =   '2002'
 
-    /*
-        *   Id Referencia
-    */
     DECLARE @id_referencia_flete    NVARCHAR(15)    =   'FLE001';
-    
-    /*
-        *   Tipo de proceso
-        *       POS     ->  Agregar documentación
-        *       ONLINE  ->  Agregar documentación
-    */
+
     DECLARE @tipo_proceso  VARCHAR(20)   = 'POS';
 
-    /*
-		*	Definición de la tabla de pedidos del ERP
-	*/
 	DECLARE @t430_cm_pv_docto TABLE (
 		f430_referencia             NVARCHAR(10),
 		f430_num_docto_referencia   NVARCHAR(15)
 	);
 
-    /*
-		*	Definición de la tabla de precios del ERP
-	*/
     DECLARE  @precios_ERP TABLE (
         f126_precio                 MONEY,
         f120_referencia    NVARCHAR(50)
     )
 
-    /*
-		*	Definición de la tabla de terceros del ERP
-	*/
     DECLARE  @terceros_clientes_ERP TABLE (
         f200_id         NVARCHAR(50),
         f015_id_pais    NVARCHAR(3)
     );
 
-    /*
-        *   Obtener la cadena de conexión del ERP
-    */
     DECLARE @conexion   NVARCHAR(MAX);
     DECLARE @base_datos NVARCHAR(MAX);
 
@@ -146,9 +73,6 @@ BEGIN TRY
         @base_datos =   base_datos
     FROM [shopify-colombia-clemont].[dbo].[conexiones];
 
-    /*
-		*	Consulta a la tabla de pedidos del ERP
-	*/
     INSERT INTO @t430_cm_pv_docto
 	EXEC
     (
@@ -175,9 +99,6 @@ BEGIN TRY
         '
     );
 
-    /*
-        *   Valida si el precio del ecommerce es diferente al del erp y si lo es lo toma como un descuento
-    */
     INSERT INTO @precios_ERP
     EXEC('
         SELECT DISTINCT
@@ -226,21 +147,13 @@ BEGIN TRY
             ''
         )
     ');
-	
---->================================================================================================================<---
 
-    /*
-        *   Actualizar a estado 2 pedidos que estén en estado superior a 3
-    */
     UPDATE ord
     SET id_estado = 2
     FROM [shopify-colombia-clemont].[dbo].[ordenes] AS ord
     WHERE
         id_estado = 4;
 
-    /*
-        *   Actualizar a estado 3 pedidos ya existentes
-    */
     UPDATE ord
     SET id_estado = 3
     FROM [shopify-colombia-clemont].[dbo].[ordenes] AS ord
@@ -251,10 +164,7 @@ BEGIN TRY
                 f430_referencia =   id_orden
     WHERE
         id_estado = 2;
-    
-    /*
-        *   Actualizar a estado 2 pedidos aún no existentes pero que aparece como que ya existieran
-    */
+
     UPDATE ord
     SET id_estado = 2
     FROM [shopify-colombia-clemont].[dbo].[ordenes] AS ord
@@ -277,10 +187,6 @@ BEGIN TRY
 		orden_obj	NVARCHAR(MAX)
 	);
 
-    /*
-		*	Obtener órdenes pendientes de procesamiento que se encuentran en estado 2 y 
-		*	tienen menos de 3 intentos de procesamiento
-	*/
 	INSERT INTO @ordenes (id_orden, orden_obj)
 	SELECT TOP (@batch_size)
 		id_orden, 
@@ -297,43 +203,7 @@ BEGIN TRY
 		intentos	<=	@max_intentos
         AND 
         (
-            -- (
             @tipo_proceso = 'POS'
-            --     AND 
-            --     (
-            --         -- Caso vacío
-            --         LTRIM(
-            --             RTRIM(
-            --                 ISNULL(
-            --                     JSON_VALUE(orden_obj, '$.tags'), 
-            --                     ''
-            --                 )
-            --             )
-            --         )   =   ''
-            --         -- Caso PERSONALSHOPPER
-            --         OR 
-            --         CHARINDEX(
-            --             'personalshopper',
-            --             LOWER(
-            --                 ISNULL(
-            --                     JSON_VALUE(orden_obj, '$.tags'), 
-            --                     ''
-            --                 )
-            --             )
-            --         ) > 0
-            --         -- Caso ecommerce
-            --         OR 
-            --         CHARINDEX(
-            --             'ecommerce',
-            --             LOWER(
-            --                 ISNULL(
-            --                     JSON_VALUE(orden_obj, '$.tags'), 
-            --                     ''
-            --                 )
-            --             )
-            --         ) > 0
-            --     )
-            -- )
             OR 
             (
                 @tipo_proceso = 'ONLINE'
@@ -352,12 +222,7 @@ BEGIN TRY
             )
         )
     ORDER BY ID DESC;
-	
---->================================================================================================================<---
 
-    /*
-		*	Definición de la sección de Pedidos del conector
-	*/
     DECLARE @Pedidos TABLE (
         f430_consec_docto           NVARCHAR(8),
         f430_id_fecha               NVARCHAR(8),
@@ -371,9 +236,6 @@ BEGIN TRY
         f430_id_tercero_vendedor    NVARCHAR(15)
     );
 
-    /*
-		*	Definición de la sección de Movto Pedidos comercial del conector
-	*/
     DECLARE @Movto_Pedidos_comercial TABLE (
         id                      NVARCHAR(20),
         f431_consec_docto       NVARCHAR(8),
@@ -389,9 +251,6 @@ BEGIN TRY
         f431_ind_impto_asumido  NVARCHAR(1)
     );
 
-    /*
-		*	Definición de la sección de Descuentos del conector
-	*/
 	DECLARE @Descuentos	TABLE (
         f430_consec_docto   NVARCHAR(8),
 		f431_nro_registro	NVARCHAR(10),
@@ -409,25 +268,14 @@ BEGIN TRY
         variant_title           NVARCHAR(20),
         discount_amount         NVARCHAR(MAX)
     );
-	
---->================================================================================================================<---
-
-    /*
-		*	Definición de variables para el procesamiento de las órdenes
-	*/
 	DECLARE @order		NVARCHAR(30);
 	DECLARE @json		NVARCHAR(MAX)	= 	'';
 	DECLARE @total		INT	=	(SELECT COUNT(*) FROM @ordenes);	--	*	Total de órdenes a procesar
 	DECLARE @counter	INT	=	1;
-	
---->================================================================================================================<---
- 
+
     WHILE @counter <= @total
     BEGIN
         BEGIN TRY
-            /*
-				*	Obtener el JSON de la orden actual
-			*/
 			SET @json	=	(
 				SELECT
 					orden_obj
@@ -608,8 +456,7 @@ BEGIN TRY
             DECLARE @consec_docto   VARCHAR(50) =   JSON_VALUE(@json,'$.order_number');
             DECLARE @id_fecha       VARCHAR(8)  =   FORMAT(CAST(JSON_VALUE(@json, '$.updated_at') AS DATE),'yyyyMMdd'),
                     @fecha_entrega  VARCHAR(10) =   FORMAT(DATEADD(DAY,1,CAST(JSON_VALUE(@json, '$.updated_at') AS DATE)),'yyyyMMdd');
- 
-            /* ========= PEDIDOS ========= */
+
             INSERT INTO @Pedidos
             (
                 f430_consec_docto,
@@ -664,7 +511,6 @@ BEGIN TRY
                         FROM OPENJSON(LI.VALUE, '$.discount_allocations') AS DA
                     )
             FROM OPENJSON(@json,'$.line_items') AS LI;
-            /* ========= MOVIMIENTOS ========= */
             INSERT INTO @Movto_Pedidos_comercial
             (
                 id,
@@ -722,7 +568,6 @@ BEGIN TRY
                 LEFT JOIN @precios_ERP p
                     ON p.f120_referencia = SKU;
 
-            /* ========= SHIPPING ========= */
             INSERT INTO @Movto_Pedidos_comercial
             (
                 id,
@@ -755,11 +600,6 @@ BEGIN TRY
             WHERE
                 CAST(JSON_VALUE(SL.value, '$.price') AS DECIMAL(10,4)) > 0
 
---->================================================================================================================<---
-
-	        /*
-	        	*	Inserción sección de descuentos
-	        */
             INSERT INTO @Descuentos
             (
                 f430_consec_docto,

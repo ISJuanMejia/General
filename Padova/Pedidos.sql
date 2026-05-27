@@ -158,7 +158,7 @@ BEGIN TRY
 		AND
 		intentos	<=	@max_intentos
         AND
-        fecha_creacion > '2026-04-17'
+        fecha_creacion > '2026-04-28'
     ORDER BY ID DESC;
 
 --->================================================================================================================<---
@@ -431,7 +431,9 @@ BEGIN TRY
                         FROM OPENJSON(LI.VALUE, '$.discount_allocations') AS DA
                         GROUP BY JSON_VALUE(DA.value, '$.amount')
                     )
-            FROM OPENJSON(@json,'$.line_items') AS LI;
+            FROM OPENJSON(@json,'$.line_items') AS LI
+            WHERE
+                CAST(JSON_VALUE(LI.value,'$.gift_card') AS BIT) = 0;
 
 	        /*
 	        	*	Inserción sección de movimientos pedidos comercial
@@ -523,46 +525,57 @@ BEGIN TRY
             WHERE
                 LI.discount_amount  IS NOT NULL;
 
-            INSERT INTO @final
-            (
-                idDocumento,
-                indicaParalelismo,
-                descripcion,
-                idOrden,
-                json
-            )
-            SELECT
-                @idDocumento,
-                @indicaParalelismo,
-                @descripcionConector,
-                @order,
-                CAST(
-                    (
-                        SELECT
-                            Pedidos =
-                            (
-                                SELECT * 
-                                FROM @Pedidos 
-                                FOR JSON PATH
-                            ),
-                            [Movto Pedidos comercial]   =
-                            (
-                                SELECT * 
-                                FROM @Movto_Pedidos_comercial 
-                                FOR JSON PATH
-                            ),
-                            Descuentos  =   
-                            (
-                                SELECT * 
-                                FROM @Descuentos 
-                                FOR JSON PATH
-                            )
-                        FOR JSON PATH, 
-                        WITHOUT_ARRAY_WRAPPER
-                    ) AS VARCHAR(MAX)
-                );
+            IF EXISTS (SELECT 1 FROM @Movto_Pedidos_comercial)
+            BEGIN
+                INSERT INTO @final
+                (
+                    idDocumento,
+                    indicaParalelismo,
+                    descripcion,
+                    idOrden,
+                    json
+                )
+                SELECT
+                    @idDocumento,
+                    @indicaParalelismo,
+                    @descripcionConector,
+                    @order,
+                    CAST(
+                        (
+                            SELECT
+                                Pedidos =
+                                (
+                                    SELECT * 
+                                    FROM @Pedidos 
+                                    FOR JSON PATH
+                                ),
+                                [Movto Pedidos comercial]   =
+                                (
+                                    SELECT * 
+                                    FROM @Movto_Pedidos_comercial 
+                                    FOR JSON PATH
+                                ),
+                                Descuentos  =   
+                                (
+                                    SELECT * 
+                                    FROM @Descuentos 
+                                    FOR JSON PATH
+                                )
+                            FOR JSON PATH, 
+                            WITHOUT_ARRAY_WRAPPER
+                        ) AS VARCHAR(MAX)
+                    );
+                END
+                ELSE
+                BEGIN
+                    UPDATE [shopify-colombia-padova].dbo.ordenes
+                    SET id_estado = 3
+                    WHERE
+                        id_orden = @order
+                END
         END TRY
         BEGIN CATCH
+            /*
             SELECT
                 ErrorNumber         =   ERROR_NUMBER(),
                 ErrorSeverity       =   ERROR_SEVERITY(),
@@ -570,6 +583,7 @@ BEGIN TRY
                 ErrorProcedure      =   ERROR_PROCEDURE(),
                 ErrorLine           =   ERROR_LINE(),
                 ErrorMessage        =   ERROR_MESSAGE();
+            */
 
             UPDATE [shopify-colombia-padova].dbo.ordenes
             SET intentos = intentos + 1

@@ -1,0 +1,75 @@
+{
+  "Pedidos": [
+    {
+      "f430_id_fecha": "20260506",
+      "f430_id_tercero_fact": "33702138",
+      "f430_id_tercero_rem": "33702138",
+      "f430_id_tipo_cli_fact": "W001",
+      "f430_fecha_entrega": "20260507",
+      "f430_num_docto_referencia": "1613940570393-01 (570393) - Prueba 1",
+      "f430_notas": "1613940570393-01-570393"
+    }
+  ],
+  "MovimientoPedidoComercial": [
+    {
+      "f431_nro_registro": 1,
+      "f431_referencia_item": "",
+      "f431_codigo_barras": "7707066063057",
+      "f431_fecha_entrega": "20260507",
+      "f431_id_unidad_medida": "PR",
+      "f431_cant_pedida_base": 2,
+      "f431_id_lista_precio": "P01",
+      "f431_precio_unitario": 163100,
+      "f431_ind_obsequio": "0",
+      "f431_ind_impto_asumido": "0",
+      "f431_id_motivo": "01",
+      "f431_id_ccosto_movto": "",
+      "f431_notas": "1613940570393-01-570393"
+    },
+    {
+      "f431_nro_registro": 2,
+      "f431_referencia_item": "",
+      "f431_codigo_barras": "7707066063057",
+      "f431_fecha_entrega": "20260507",
+      "f431_id_unidad_medida": "PR",
+      "f431_cant_pedida_base": 1,
+      "f431_id_lista_precio": "P01",
+      "f431_precio_unitario": 163100,
+      "f431_ind_obsequio": "1",
+      "f431_ind_impto_asumido": "1",
+      "f431_id_motivo": "03",
+      "f431_id_ccosto_movto": "030805",
+      "f431_notas": "1613940570393-01-570393"
+    },
+    {
+      "f431_nro_registro": 3,
+      "f431_referencia_item": "",
+      "f431_codigo_barras": "99999991",
+      "f431_fecha_entrega": "20260507",
+      "f431_id_unidad_medida": "UN",
+      "f431_cant_pedida_base": 1,
+      "f431_id_lista_precio": "P01",
+      "f431_precio_unitario": 450,
+      "f431_ind_obsequio": "0",
+      "f431_ind_impto_asumido": "0",
+      "f431_id_motivo": "01",
+      "f431_id_ccosto_movto": "",
+      "f431_notas": "1613940570393-01-570393"
+    },
+    {
+      "f431_nro_registro": 4,
+      "f431_referencia_item": "99999977",
+      "f431_codigo_barras": "",
+      "f431_fecha_entrega": "20260507",
+      "f431_id_unidad_medida": "UN",
+      "f431_cant_pedida_base": 1,
+      "f431_id_lista_precio": "P01",
+      "f431_precio_unitario": 10000,
+      "f431_ind_obsequio": "0",
+      "f431_ind_impto_asumido": "0",
+      "f431_id_motivo": "01",
+      "f431_id_ccosto_movto": "",
+      "f431_notas": "Shipping"
+    }
+  ]
+}

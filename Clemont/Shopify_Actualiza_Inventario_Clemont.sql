@@ -230,9 +230,15 @@ BEGIN TRY
                 )
     WHERE
         (
-            f121_id_barras_principal IS NOT NULL
-            OR
-            f131_id IS NOT NULL
+            -- (
+            --     f121_id_barras_principal IS NOT NULL
+            --     OR
+            --     f131_id IS NOT NULL
+            -- )
+            -- OR
+            (
+                f120_referencia IS NOT NULL
+            )
         )
         AND
         f150_id IS NOT NULL;
@@ -247,38 +253,36 @@ BEGIN TRY
     );
 
     INSERT INTO @inventarios_siesa_shopify
-    SELECT DISTINCT
+    SELECT
         inventory_item_id,
-        barcode = sku,
-        cantidad    =
-            ISNULL(
-                CONVERT(
-                    INT, 
-                    cantidad
-                ), 
-                0
-            ),
-        b.id_location,
-        bodega  =   
-            ISNULL(
+        barcode,
+        SUM(cantidad) AS cantidad,
+        id_location,
+        bodega
+    FROM (
+        SELECT
+            inventory_item_id,
+            barcode = sku,
+            cantidad = ISNULL(CONVERT(INT, cantidad), 0),
+            b.id_location,
+            bodega = ISNULL(
                 b.bodega_erp, 
-                (
-                    SELECT TOP 1 
-                    bodega_erp 
-                    FROM @bodegas
-                )
+                (SELECT TOP 1 bodega_erp FROM @bodegas)
             )
-    FROM inventario_bodega_ecommerce i
-        LEFT JOIN @bodegas b 
-            ON 
-                i.id_location   =   b.id_location
-        LEFT JOIN @inventarios iss 
-            ON 
-                i.sku   =   iss.barcode
-    WHERE
-        inventory_item_id   IS NOT NULL
-        AND
-        b.id_location IS NOT NULL
+        FROM inventario_bodega_ecommerce i
+            LEFT JOIN @bodegas b 
+                ON i.id_location = b.id_location
+            LEFT JOIN @inventarios iss 
+                ON i.sku = iss.barcode
+        WHERE
+            inventory_item_id IS NOT NULL
+            AND b.id_location IS NOT NULL
+    ) base
+    GROUP BY
+        inventory_item_id,
+        barcode,
+        id_location,
+        bodega;
 
     MERGE INTO dbo.inventarios AS TARGET
     USING @inventarios_siesa_shopify AS source
@@ -286,6 +290,8 @@ BEGIN TRY
             target.sku_erp  =   source.barcode
             AND
             target.bodega   =   source.bodega
+            AND
+            JSON_VALUE(target.inventario_obj, '$.inventory_item_id')    =   source.inventory_item_id
         WHEN
             MATCHED
             AND

@@ -1,53 +1,562 @@
-<div style="padding: 20px; font-family: sans-serif; max-width: 1000px; margin: 0 auto;">
-  <h1>Generador de Queries Ecommerce</h1>
-
-  <div style="background: #f4f4f4; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-    <h3>Tipo de Generación</h3>
-    <div style="display: flex; gap: 20px;">
-      <div class="form-group">
-        <label>Tipo de Query:</label>
-        <select [(ngModel)]="config.queryType" (change)="onQueryTypeChange()">
-          <option [ngValue]="QueryType.Terceros">Terceros</option>
-          <option [ngValue]="QueryType.Pedidos">Pedidos</option>
+<div class="container mt-5">
+  <div class="card p-4 shadow">
+    <h2 class="text-primary mb-3">Generador de Queries Ecommerce</h2>
+    <div class="row">
+      <div class="col-4">
+        <div class="form-group">
+        <label>Versión Aplicativo:</label>
+        <select [(ngModel)]="config.version">
+          <option [ngValue]="AppVersion.GTIntegration">GTIntegration</option>
+          <option [ngValue]="AppVersion.V1">Connekta V1</option>
+          <option [ngValue]="AppVersion.V2">Connekta V2</option>
         </select>
       </div>
+    </div>
+    <div class="col-4">
       <div class="form-group">
         <label>Ecommerce:</label>
         <select [(ngModel)]="config.ecommerce">
           <option [ngValue]="EcommerceType.Shopify">Shopify</option>
           <option [ngValue]="EcommerceType.VTEX">VTEX</option>
+          <option [ngValue]="EcommerceType.WooCommerce">WooCommerce</option>
         </select>
       </div>
+    </div>
+    <div class="col-4">
       <div class="form-group">
-        <label>Versión Aplicativo:</label>
-        <select [(ngModel)]="config.version">
-          <option [ngValue]="AppVersion.V1">Versión 1</option>
-          <option [ngValue]="AppVersion.V2">Versión 2</option>
+        <label>Tipo de Query:</label>
+        <select [(ngModel)]="config.queryType" (change)="onQueryTypeChange()">
+          <option [ngValue]="QueryType.Terceros">Terceros</option>
+          <option [ngValue]="QueryType.Pedidos">Pedidos</option>
+          <option [ngValue]="QueryType.Compromisos">Compromisos</option>
+          <option [ngValue]="QueryType.Facturas">Facturas</option>
         </select>
       </div>
     </div>
   </div>
+  <hr />
+  <div class="form-group">
+    <div class="row">
+      <h3 class="text-primary mb-3">Configuración General</h3>
+      <div class="col-4">
+        <div class="form-group">
+          <label>Nombre del Cliente:</label>
+          <input [(ngModel)]="config.clientName" type="text" />
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="form-group">
+          <label>Id Conector:</label>
+          <input [(ngModel)]="config.idDocumento" type="number" />
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="form-group">
+          <label>Descripción Conector:</label>
+          <input [(ngModel)]="config.descripcionConector" type="text" />
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            Indica Paralelismo
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+  <hr />
+  <div class="form-group">
+    <div class="row">
+      <h4 class="text-primary mb-3">Secciones del conector</h4>
+      <div class="col-12">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            Terceros
+          </label>
+        </div>
+      </div>
+      <div class="col-12">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            Clientes
+          </label>
+        </div>
+      </div>
+      <div class="col-12">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            Impuestos y retenciones
+          </label>
+        </div>
+      </div>
+      <div class="col-12">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            Criterios clientes
+          </label>
+        </div>
+      </div>
+      <div class="col-12">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            Entidad dinamica tercero
+          </label>
+        </div>
+      </div>
+      <div class="col-12">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            Entidad dinamica clientes
+          </label>
+        </div>
+      </div>
+      <div class="col-4">
+        <h5 class="text-primary mb-3">Sección de terceros</h5>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F200_ID
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F200_NIT
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F200_ID_TIPO_IDENT
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F200_IND_TIPO_TERCERO
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F200_RAZON_SOCIAL
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F200_APELLIDO1
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F200_APELLIDO2
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F200_NOMBRES
+          </label>
+        </div>
+      </div>
+      <div class="col-4">
+        <h5 class="text-primary mb-3">Sección de clientes</h5>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F201_ID_TERCERO
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F201_ID_SUCURSAL
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F201_DESCRIPCION_SUCURSAL
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F201_ID_MONEDA
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F201_ID_VENDEDOR
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F201_ID_COND_PAGO
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F201_ID_SUCURSAL_CORP
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F201_ID_TIPO_CLI
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F201_ID_CO_MOVTO_FACTURA
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F201_ID_UN_MOVTO_FACTURA
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            f201_id_cobrador
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            f015_celular
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F201_ID_LISTA_PRECIO
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F015_ID_DEPTO
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F015_ID_CIUDAD
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F015_ID_BARRIO
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F015_TELEFONO
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F015_COD_POSTAL
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F015_EMAIL
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F201_FECHA_INGRESO
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F201_ID_CO_FACTURA
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F201_NOTAS
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F015_CONTACTO
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F015_DIRECCION1
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F015_DIRECCION2
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F015_DIRECCION3
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular" [(ngModel)]="config.indicaParalelismo">
+          <label class="form-check-label" for="checkAngular">
+            F015_ID_PAIS
+          </label>
+        </div>
+      </div>
+      <div class="col-4">
+        <h5 class="text-primary mb-3">Sección de impuestos y retenciones</h5>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            F_ID_TERCERO
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            F_ID_SUCURSAL
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            F_ID_CLASE
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            F_ID_VALOR_TERCERO
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            F_ID_LLAVE
+          </label>
+        </div>
+      </div>
+      <div class="col-4">
+        <h5 class="text-primary mb-3">Sección de criterios clientes</h5>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            F207_ID_TERCERO
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            F207_ID_SUCURSAL
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            F207_ID_PLAN_CRITERIOS
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            F207_ID_CRITERIO_MAYOR
+          </label>
+        </div>
+      </div>
+      <div class="col-4">
+        <h5 class="text-primary mb-3">Sección de entidad dinamica tercero</h5>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            f200_id
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            f753_id_grupo_entidad
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            f753_id_atributo
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            f753_dato_numerico
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            f753_dato_texto
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            f753_dato_fecha_hora
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            f753_id_maestro
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            f753_id_maestro_detalle
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            f753_nro_fila
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            f753_id_maestro_interno
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            f753_id_entidad
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="checkAngular">
+          <label class="form-check-label" for="checkAngular">
+            f753_id_maestro_interno_detalle
+          </label>
+        </div>
+      </div>
+      <div class="col-4">
+        <h5 class="text-primary mb-3">Sección de entidad dinamica cliente</h5>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox">
+          <label class="form-check-label" for="checkAngular">
+            f201_id_tercero
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox">
+          <label class="form-check-label" for="checkAngular">
+            f201_id_sucursal
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox">
+          <label class="form-check-label" for="checkAngular">
+            f753_id_grupo_entidad
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox">
+          <label class="form-check-label" for="checkAngular">
+            f753_id_entidad
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox">
+          <label class="form-check-label" for="checkAngular">
+            f753_id_atributo
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox">
+          <label class="form-check-label" for="checkAngular">
+            f753_dato_numerico
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox">
+          <label class="form-check-label" for="checkAngular">
+            f753_dato_texto
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox">
+          <label class="form-check-label" for="checkAngular">
+            f753_dato_fecha_hora
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox">
+          <label class="form-check-label" for="checkAngular">
+            f753_id_maestro
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox">
+          <label class="form-check-label" for="checkAngular">
+            f753_id_maestro_detalle
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox">
+          <label class="form-check-label" for="checkAngular">
+            f753_nro_fila
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox">
+          <label class="form-check-label" for="checkAngular">
+            f753_id_maestro_interno_detalle
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox">
+          <label class="form-check-label" for="checkAngular">
+            f753_id_maestro_interno
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
     <section>
       <h3>Configuración General</h3>
-      <div class="form-group">
-        <label>Nombre del Cliente:</label>
-        <input [(ngModel)]="config.clientName" type="text" />
-      </div>
-      <div class="form-group">
-        <label>ID Documento Conector:</label>
-        <input [(ngModel)]="config.idDocumento" type="number" />
-      </div>
-      <div class="form-group">
-        <label>Descripción Conector:</label>
-        <input [(ngModel)]="config.descripcionConector" type="text" />
-      </div>
-      <div class="form-group">
-        <label>
-          <input [(ngModel)]="config.indicaParalelismo" type="checkbox" /> Indica Paralelismo
-        </label>
-      </div>
 
       <div *ngIf="config.queryType === QueryType.Terceros">
         <div class="form-group">
@@ -92,7 +601,51 @@
         </div>
       </div>
     </section>
-
+    <section>
+      <h3>Secciones del conector</h3>
+      <div class="form-group" *ngIf="config.queryType === QueryType.Terceros">
+        <div>
+          <input type="checkbox" checked name="Terceros">Terceros
+          <input type="text" placeholder="Nombre sección">
+        </div>
+        <div>
+          <input type="checkbox" checked name="Clientes">Clientes
+          <input type="text" placeholder="Nombre sección">
+        </div>
+        <div>
+          <input type="checkbox" name="Impuestos_Y_Retenciones">Impuestos y retenciones
+          <input type="text" placeholder="Nombre sección">
+        </div>
+        <div>
+          <input type="checkbox" name="Criterios_Clientes">Criterios clientes
+          <input type="text" placeholder="Nombre sección">
+        </div>
+        <div>
+          <input type="checkbox" name="Entidad_Dinamica_Tercero">Entidad dinamica tercero
+          <input type="text" placeholder="Nombre sección">
+        </div>
+        <div>
+          <input type="checkbox" name="Entidad_Dinamica_Clientes">Entidad dinamica clientes
+          <input type="text" placeholder="Nombre sección">
+        </div>
+      </div>
+      <div class="form-group" *ngIf="config.queryType === QueryType.Pedidos">
+        <div>
+          <input type="checkbox" checked name="Pedidos">Pedidos
+          <input type="text" placeholder="Nombre sección">
+        </div>
+        <div>
+          <input type="checkbox" checked name="Movto_Pedidos_Comercial">Movimiento pedidos comercial
+          <input type="text" placeholder="Nombre sección">
+        </div>
+        <div>
+          <input type="checkbox" checked name="Descuentos">Descuentos
+          <input type="text" placeholder="Nombre sección">
+        </div>
+      </div>
+    </section>
+  </div>
+    <div *ngIf="config.queryType === QueryType.Terceros" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
     <section>
       <h3>Origen de Datos y Localización</h3>
       <div class="form-group">
@@ -122,6 +675,82 @@
       </div>
     </section>
   </div>
+
+
+    <div *ngIf="config.queryType === QueryType.Terceros" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+      <section>
+        <h3>Conector de terceros</h3>
+        <div>
+          <input type="checkbox" checked name="F200_ID">F200_ID
+        </div>
+        <div>
+          <input type="checkbox" checked name="F200_NIT">F200_NIT
+        </div>
+        <div>
+          <input type="checkbox" name="F200_ID_TIPO_IDENT">F200_ID_TIPO_IDENT
+        </div>
+        <div>
+          <input type="checkbox" name="F200_IND_TIPO_TERCERO">F200_IND_TIPO_TERCERO
+        </div>
+        <div>
+          <input type="checkbox" checked name="F200_RAZON_SOCIAL">F200_RAZON_SOCIAL
+        </div>
+        <div>
+          <input type="checkbox" checked name="F200_APELLIDO1">F200_APELLIDO1
+        </div>
+        <div>
+          <input type="checkbox" checked name="F200_APELLIDO2">F200_APELLIDO2
+        </div>
+        <div>
+          <input type="checkbox" checked name="F200_NOMBRES">F200_NOMBRES
+        </div>
+        <div>
+          <input type="checkbox" name="F200_NOMBRE_EST">F200_NOMBRE_EST
+        </div>
+        <div>
+          <input type="checkbox" checked name="F015_CONTACTO">F015_CONTACTO
+        </div>
+        <div>
+          <input type="checkbox" checked name="F015_DIRECCION1">F015_DIRECCION1
+        </div>
+        <div>
+          <input type="checkbox" checked name="F015_DIRECCION2">F015_DIRECCION2
+        </div>
+        <div>
+          <input type="checkbox" checked name="F015_DIRECCION3">F015_DIRECCION3
+        </div>
+        <div>
+          <input type="checkbox" name="F015_ID_PAIS">F015_ID_PAIS
+        </div>
+        <div>
+          <input type="checkbox" checked name="F015_ID_DEPTO">F015_ID_DEPTO
+        </div>
+        <div>
+          <input type="checkbox" checked name="F015_ID_CIUDAD">F015_ID_CIUDAD
+        </div>
+        <div>
+          <input type="checkbox" name="F015_ID_BARRIO">F015_ID_BARRIO
+        </div>
+        <div>
+          <input type="checkbox" checked name="F015_TELEFONO">F015_TELEFONO
+        </div>
+        <div>
+          <input type="checkbox" name="F015_COD_POSTAL">F015_COD_POSTAL
+        </div>
+        <div>
+          <input type="checkbox" checked name="F015_EMAIL">F015_EMAIL
+        </div>
+        <div>
+          <input type="checkbox" checked name="F200_FECHA_NACIMIENTO">F200_FECHA_NACIMIENTO
+        </div>
+        <div>
+          <input type="checkbox" name="F200_ID_CIIU">F200_ID_CIIU
+        </div>
+        <div>
+          <input type="checkbox" checked name="F015_CELULAR">F015_CELULAR
+        </div>
+      </section>
+    </div>
 
   <hr />
 

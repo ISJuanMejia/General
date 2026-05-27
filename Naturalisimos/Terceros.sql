@@ -61,17 +61,14 @@ BEGIN TRY
             @f_id_valor_tercero_4   NVARCHAR(2) =   '4'; -- TODO -> Configurar según el caso, validar según reglas del cliente
 
     /*
-		TODO -> Configurar según el caso, validar según reglas del cliente, eliminar comentarios cuando finalice configuración
 		*	Id maestro detalle tercero en entidades dinamicas tercero:
-		*		1	->	Id maestro detalle tercero 1
-		*		2	->	Id maestro detalle tercero 2
-		*		3	->	Id maestro detalle tercero 3
-		*		4	->	Id maestro detalle tercero 4
+		*		48		->	Id maestro detalle tercero 1
+		*		R-99-PN	->	Id maestro detalle tercero 2
+		*		01		->	Id maestro detalle tercero 3
 	*/
-	DECLARE @id_maestro_detalle_tercero_1	NVARCHAR(2) =   '1', -- TODO -> Configurar según el caso, validar según reglas del cliente
-            @id_maestro_detalle_tercero_2	NVARCHAR(2) =   '2', -- TODO -> Configurar según el caso, validar según reglas del cliente
-            @id_maestro_detalle_tercero_3	NVARCHAR(2) =   '3', -- TODO -> Configurar según el caso, validar según reglas del cliente
-            @id_maestro_detalle_tercero_4	NVARCHAR(2) =   '4'; -- TODO -> Configurar según el caso, validar según reglas del cliente
+	DECLARE @id_maestro_detalle_tercero_1	NVARCHAR(20)	=   '48',
+            @id_maestro_detalle_tercero_2	NVARCHAR(20)	=   'R-99-PN',
+            @id_maestro_detalle_tercero_3	NVARCHAR(20)	=   '01';
 
 
 	DECLARE @id_pais_defecto	NVARCHAR(3)	=	'169',
@@ -549,7 +546,7 @@ BEGIN TRY
 				F015_ID_DEPTO			=	LEFT(@id_dptos_erp, 2),
 				F015_ID_CIUDAD			=	LEFT(@id_ciudad_erp, 3),
 				F015_TELEFONO			=	LEFT(@telefono_cliente, 20),
-				F015_EMAIL				=	@email_cliente,
+				F015_EMAIL				=	ISNULL(@email_cliente, ''),
 				F200_FECHA_NACIMIENTO	=	@fecha_creacion,
 				F015_CELULAR			=	LEFT(@telefono_cliente, 50);
 
@@ -622,21 +619,21 @@ BEGIN TRY
 				f753_id_entidad			=	'EUNOECO017',
 				f753_id_atributo		=	'co017_codigo_regimen',
 				f753_id_maestro			=	'MUNOECO016',
-				f753_id_maestro_detalle	=	'48'
+				f753_id_maestro_detalle	=	@id_maestro_detalle_tercero_1
 			UNION ALL
 			SELECT
 				f200_id					=	@id_cliente,
 				f753_id_entidad			=	'EUNOECO017',
 				f753_id_atributo		=	'co017_cod_tipo_oblig',
 				f753_id_maestro			=	'MUNOECO019',
-				f753_id_maestro_detalle	=	'R-99-PN'
+				f753_id_maestro_detalle	=	@id_maestro_detalle_tercero_2
 			UNION ALL
 			SELECT
 				f200_id					=	@id_cliente,
 				f753_id_entidad			=	'EUNOECO031',
 				f753_id_atributo		=	'co031_detalle_tributario1',
 				f753_id_maestro			=	'MUNOECO035',
-				f753_id_maestro_detalle	=	'01';
+				f753_id_maestro_detalle	=	@id_maestro_detalle_tercero_3;
 			
 			INSERT INTO @Ent_Dinamica_Cliente
 			(
@@ -645,9 +642,7 @@ BEGIN TRY
 			)
 			SELECT
 				f201_id_tercero			=	@id_cliente,
-				f753_dato_texto			=	@email_cliente
-			WHERE
-				@email_cliente	IS NOT NULL;
+				f753_dato_texto			=	ISNULL(@email_cliente, '');
 			
 			INSERT INTO @final(
 				idDocumento,
