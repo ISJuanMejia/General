@@ -1,0 +1,109 @@
+<div style="padding: 20px; font-family: sans-serif;">
+  <h1>Generador de Queries de Terceros</h1>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+    <section>
+      <h3>Configuración General</h3>
+      <div class="form-group">
+        <label>Nombre del Cliente:</label>
+        <input [(ngModel)]="config.clientName" type="text" />
+      </div>
+      <div class="form-group">
+        <label>ID Documento Conector:</label>
+        <input [(ngModel)]="config.idDocumento" type="number" />
+      </div>
+      <div class="form-group">
+        <label>Descripción Conector:</label>
+        <input [(ngModel)]="config.descripcionConector" type="text" />
+      </div>
+      <div class="form-group">
+        <label>Sucursal ERP:</label>
+        <input [(ngModel)]="config.idSucursal" type="text" />
+      </div>
+      <div class="form-group">
+        <label>Lista de Precio Defecto:</label>
+        <input [(ngModel)]="config.idListaPrecio" type="text" />
+      </div>
+      <div class="form-group">
+        <label>ID CIIU:</label>
+        <input [(ngModel)]="config.idCiiu" type="text" />
+      </div>
+      <div class="form-group">
+        <label>
+          <input [(ngModel)]="config.indicaParalelismo" type="checkbox" /> Indica Paralelismo
+        </label>
+      </div>
+      <div class="form-group">
+        <label>
+          <input [(ngModel)]="config.processClientWithoutId" type="checkbox" /> Procesar sin ID
+        </label>
+      </div>
+    </section>
+
+    <section>
+      <h3>Origen de Datos y Localización</h3>
+      <div class="form-group">
+        <label>Origen Datos Cliente (1:Cust, 2:Bill, 3:C->B, 4:B->C):</label>
+        <select [(ngModel)]="config.clientOriginData">
+          <option [ngValue]="1">Customer</option>
+          <option [ngValue]="2">Billing</option>
+          <option [ngValue]="3">Customer -> Billing</option>
+          <option [ngValue]="4">Billing -> Customer</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Origen Datos Localización (1:Cust, 2:Bill, 3:Ship):</label>
+        <select [(ngModel)]="config.locationOriginData">
+          <option [ngValue]="1">Customer</option>
+          <option [ngValue]="2">Billing</option>
+          <option [ngValue]="3">Shipping</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>País/Dpto/Ciudad Defecto (Siesa):</label>
+        <input [(ngModel)]="config.idPaisDefecto" placeholder="Pais" style="width: 50px;" />
+        <input [(ngModel)]="config.idDptoDefecto" placeholder="Dpto" style="width: 50px;" />
+        <input [(ngModel)]="config.idCiudadDefecto" placeholder="Ciudad" style="width: 50px;" />
+      </div>
+    </section>
+  </div>
+
+  <hr />
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+    <section>
+      <h3>Impuestos</h3>
+      <button (click)="addTax()">Agregar Impuesto</button>
+      <div *ngFor="let tax of config.taxes; let i = index" style="margin-top: 10px; border: 1px solid #ccc; padding: 5px;">
+        <input [(ngModel)]="tax.tipoReg" placeholder="Tipo Reg" style="width: 60px;" />
+        <input [(ngModel)]="tax.clase" placeholder="Clase" style="width: 60px;" />
+        <input [(ngModel)]="tax.valorTercero" placeholder="Valor Tcro" style="width: 60px;" />
+        <button (click)="removeTax(i)">X</button>
+      </div>
+    </section>
+
+    <section>
+      <h3>Entidades Dinámicas</h3>
+      <button (click)="addEntity()">Agregar Entidad</button>
+      <div *ngFor="let ent of config.dynamicEntities; let i = index" style="margin-top: 10px; border: 1px solid #ccc; padding: 5px;">
+        <input [(ngModel)]="ent.idEntidad" placeholder="Entidad" />
+        <input [(ngModel)]="ent.idAtributo" placeholder="Atributo" />
+        <input [(ngModel)]="ent.idMaestro" placeholder="Maestro" />
+        <input [(ngModel)]="ent.idMaestroDetalle" placeholder="Detalle" />
+        <button (click)="removeEntity(i)">X</button>
+      </div>
+    </section>
+  </div>
+
+  <div style="margin-top: 30px; text-align: center;">
+    <button (click)="generateSql()" style="padding: 10px 20px; font-size: 1.2em; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+      Generar SQL de Terceros
+    </button>
+  </div>
+</div>
+
+<style>
+  .form-group { margin-bottom: 10px; }
+  label { display: block; margin-bottom: 5px; font-weight: bold; }
+  input[type="text"], input[type="number"], select { width: 100%; padding: 5px; box-sizing: border-box; }
+</style>
