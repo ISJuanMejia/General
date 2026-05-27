@@ -3,6 +3,10 @@ import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 
+enum QueryType { Terceros = 0, Pedidos = 1 }
+enum EcommerceType { Shopify = 0, VTEX = 1 }
+enum AppVersion { V1 = 0, V2 = 1 }
+
 interface TaxConfig {
   tipoReg: string;
   clase: string;
@@ -17,8 +21,16 @@ interface DynamicEntityConfig {
   idMaestroDetalle: string;
 }
 
+interface PaymentMapping {
+  gatewayName: string;
+  erpCode: string;
+}
+
 interface QueryConfiguration {
   clientName: string;
+  queryType: QueryType;
+  ecommerce: EcommerceType;
+  version: AppVersion;
   idDocumento: number;
   descripcionConector: string;
   indicaParalelismo: boolean;
@@ -35,6 +47,12 @@ interface QueryConfiguration {
   idCiiu: string;
   taxes: TaxConfig[];
   dynamicEntities: DynamicEntityConfig[];
+  idTipoDocto: string;
+  idCo: string;
+  idVendedor: string;
+  unidadMedidaItem: string;
+  referenciaFlete: string;
+  payments: PaymentMapping[];
 }
 
 @Component({
@@ -45,8 +63,15 @@ interface QueryConfiguration {
   styleUrl: './app.css'
 })
 export class AppComponent implements OnInit {
+  QueryType = QueryType;
+  EcommerceType = EcommerceType;
+  AppVersion = AppVersion;
+
   config: QueryConfiguration = {
     clientName: 'NuevoCliente',
+    queryType: QueryType.Terceros,
+    ecommerce: EcommerceType.Shopify,
+    version: AppVersion.V1,
     idDocumento: 200000,
     descripcionConector: 'Ecommerce_Terceros_Clientes',
     indicaParalelismo: true,
@@ -62,13 +87,20 @@ export class AppComponent implements OnInit {
     processClientWithoutId: false,
     idCiiu: '0081',
     taxes: [],
-    dynamicEntities: []
+    dynamicEntities: [],
+    idTipoDocto: 'EPV',
+    idCo: '001',
+    idVendedor: '9999',
+    unidadMedidaItem: 'UND',
+    referenciaFlete: 'FLETES',
+    payments: []
   };
 
   constructor(private http: HttpClient) {}
 
   ngOnInit() {
     this.addTax();
+    this.addPayment();
   }
 
   addTax() {
@@ -93,13 +125,30 @@ export class AppComponent implements OnInit {
     this.config.dynamicEntities.splice(index, 1);
   }
 
+  addPayment() {
+    this.config.payments.push({ gatewayName: '', erpCode: '' });
+  }
+
+  removePayment(index: number) {
+    this.config.payments.splice(index, 1);
+  }
+
+  onQueryTypeChange() {
+    if (this.config.queryType === QueryType.Terceros) {
+      this.config.descripcionConector = 'Ecommerce_Terceros_Clientes';
+    } else {
+      this.config.descripcionConector = 'Ecommerce_Pedidos';
+    }
+  }
+
   generateSql() {
     this.http.post('http://localhost:5000/api/generator/generate', this.config, { responseType: 'blob' })
       .subscribe(blob => {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${this.config.clientName}_Terceros.sql`;
+        const suffix = this.config.queryType === QueryType.Terceros ? 'Terceros' : 'Pedidos';
+        a.download = `${this.config.clientName}_${suffix}.sql`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

@@ -21,9 +21,10 @@ namespace QueryGenerator.Api.Controllers
         {
             if (config == null) return BadRequest("Invalid configuration");
 
-            string sql = _sqlGeneratorService.GenerateTercerosSql(config);
+            string sql = _sqlGeneratorService.GenerateSql(config);
             var bytes = Encoding.UTF8.GetBytes(sql);
-            var fileName = $"{config.ClientName}_Terceros.sql";
+            var suffix = config.QueryType == QueryType.Terceros ? "Terceros" : "Pedidos";
+            var fileName = $"{config.ClientName}_{suffix}.sql";
 
             return File(bytes, "application/sql", fileName);
         }
@@ -36,12 +37,12 @@ namespace QueryGenerator.Api.Controllers
                 ClientName = "SampleClient",
                 Taxes = new List<TaxConfig>
                 {
-                    new TaxConfig { TipoReg = "46", Clase = "1", ValorTercero = "1" },
-                    new TaxConfig { TipoReg = "47", Clase = "41", ValorTercero = "1" }
+                    new TaxConfig { TipoReg = "46", Clase = "1", ValorTercero = "1" }
                 },
-                DynamicEntities = new List<DynamicEntityConfig>
+                Payments = new List<PaymentMapping>
                 {
-                    new DynamicEntityConfig { IdEntidad = "EUNOECO017", IdAtributo = "co017_codigo_regimen", IdMaestro = "MUNOECO016", IdMaestroDetalle = "49" }
+                    new PaymentMapping { GatewayName = "Sistecredito", ErpCode = "C005" },
+                    new PaymentMapping { GatewayName = "Addi Payment", ErpCode = "C004" }
                 }
             };
             return Ok(config);
