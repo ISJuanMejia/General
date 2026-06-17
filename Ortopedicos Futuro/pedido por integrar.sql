@@ -88,7 +88,7 @@ BEGIN TRY
         *   Además, es fundamental verificar que el endpoint esté correctamente configurado y sea accesible desde el 
         *   entorno donde se ejecutará el conector, para evitar posibles errores de conexión o de envío de datos.
     */
-    DECLARE @endpoint   NVARCHAR(500)   =   'http://localhost:8083/v3.1/ConectoresImportar?idCompania='
+    DECLARE @endpoint   NVARCHAR(500)   =   'http://localhost:8082/v3.1/ConectoresImportar?idCompania='
                                             +   @id_compania 
                                             +   '&idSistema='
                                             +   @id_sistema
