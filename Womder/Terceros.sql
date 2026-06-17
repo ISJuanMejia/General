@@ -283,7 +283,6 @@ BEGIN TRY
 				@id_dptos_erp	=	@id_dpto_defecto,
 				@id_ciudad_erp	=	@id_ciudad_defecto
 
-			/*
             SELECT
 				@id_pais_erp	=	id_pais_erp,
 				@id_dptos_erp	=	id_dptos_erp,
@@ -296,7 +295,6 @@ BEGIN TRY
                 @id_dpto_defecto,   -- id_depto_defecto
                 @id_ciudad_defecto  -- id_ciudad_defecto
             );
-			*/
 
 			SET @order	=	JSON_VALUE(@json, '$.name');	--	*	Obtener el número de la orden
 

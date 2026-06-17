@@ -119,6 +119,18 @@ BEGIN TRY
                 f430_num_docto_referencia   =   id_orden
     WHERE
         id_estado = 2
+    
+    
+    UPDATE ord
+    SET id_estado = 2
+    FROM [shopify-colombia-womder].dbo.ordenes AS ord
+        LEFT JOIN @t430_cm_pv_docto
+            ON
+                f430_num_docto_referencia   =   id_orden
+    WHERE
+        id_estado = 3
+        AND
+        f430_num_docto_referencia   IS NULL
 
 	/*
 		*	Obtener órdenes pendientes de procesamiento que se encuentran en estado 2 y 
@@ -488,7 +500,9 @@ BEGIN TRY
                     ON
                         LI.id   =   MPC.id
             WHERE
-                LI.discount_amount  IS NOT NULL;
+                LI.discount_amount  IS NOT NULL
+                AND
+                CAST(LI.discount_amount AS DECIMAL(10,4)) != 0;
 
             IF EXISTS (SELECT 1 FROM @Movto_Pedidos_comercial)
             BEGIN
