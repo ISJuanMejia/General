@@ -34,6 +34,57 @@ BEGIN TRY
 		AND 
 		intentos	=	0;
 	
+	DECLARE @ordenes_seleccionadas	TABLE
+	(
+		Id					INT,
+		IdTienda			NVARCHAR(100),
+		IdOrder				NVARCHAR(100),
+		IdEstado			INT,
+		Order_jsonWebhook	NVARCHAR(MAX),
+		Order_jsonApi		NVARCHAR(MAX),
+		FechaCreacion		DATETIME
+	);
+
+	INSERT INTO @ordenes_seleccionadas
+	SELECT TOP 25
+		Id,
+		IdTienda,
+		IdOrder,
+		IdEstado,
+		Order_jsonWebhook,
+		Order_jsonApi,
+		FechaCreacion
+	FROM Orders
+	WHERE
+		IdEstado	=	2
+		AND
+		Intentos	<=	4
+		AND
+		(
+			SWITCHOFFSET(
+				TRY_CONVERT(datetimeoffset, JSON_VALUE(Order_jsonApi, '$.createdAt')),
+				DATENAME(TzOffset, SYSDATETIMEOFFSET())
+			) > 
+			CASE
+				WHEN   JSON_VALUE(Order_jsonApi, '$.Warehouse.name')   IN   ('Bodega Ingram', 'Bodega Online', 'Bodega Bogota') 
+					THEN    
+						CASE
+							WHEN    DATEADD(DAY, -7, GETDATE()) <=   '2026-06-12 17:00:00'
+								THEN    '2026-06-12 17:00:00'
+							ELSE    DATEADD(DAY, -7, GETDATE())
+						END
+				WHEN      JSON_VALUE(Order_jsonApi, '$.Warehouse.name')   IN   ('FULL', 'FULL FALABELLA', 'FULL ML BOGOTA', 'FULL ML TIENDA OFICIAL') 
+					THEN    DATEADD(DAY, -7, GETDATE())
+				ELSE 
+					CASE
+						WHEN    DATEADD(DAY, -7, GETDATE()) <=   '2026-06-12 17:00:00'
+							THEN    '2026-06-12 17:00:00'
+						ELSE    DATEADD(DAY, -7, GETDATE())
+					END
+			END 
+		)
+	ORDER BY ID DESC;
+	
 	DECLARE	@ordenes	TABLE
 	(
 		IdOrder				NVARCHAR(100),
@@ -85,13 +136,7 @@ BEGIN TRY
 		[stateTer]			=	JSON_VALUE(Order_jsonApi, '$.Client.BillingAddresses[0].state'),
 		[ciudadTer]			=	JSON_VALUE(Order_jsonApi, '$.Client.BillingAddresses[0].country'),
 		[origen]			=	JSON_VALUE(Order_jsonApi, '$.origin')
-	FROM Orders
-	WHERE
-		IdEstado	=	2
-		AND
-		Intentos	<=	3
-		-- AND
-		-- IdOrder = '9aafdf7c-5920-41ee-9c1e-6c12620682f1';
+	FROM @ordenes_seleccionadas;
 
 	DECLARE @terceros	TABLE
 	(
@@ -292,7 +337,7 @@ BEGIN TRY
 					CASE
 						WHEN	tipoTercero	=	'1'
 							THEN	''
-						ELSE	UPPER(nombreTer)
+						ELSE	TRIM(LEFT(UPPER(nombreTer), 100))
 					END,
 				[F200_APELLIDO1]		=
 					CASE
@@ -674,7 +719,6 @@ BEGIN TRY
 			-- ENT. DINAMICAS CLIENTE
 			CREATE TABLE #company_entidadCliente(
 				f201_id_tercero         VARCHAR(255),
-				f201_id_sucursal        VARCHAR(255),
 				f753_id_entidad         VARCHAR(255),
 				f753_id_atributo        VARCHAR(255),
 				f753_id_maestro         VARCHAR(255),
