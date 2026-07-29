@@ -47,13 +47,13 @@ BEGIN TRY
     DECLARE @endpoint_terceros      NVARCHAR(500),
             @endpoint_puntos_envio  NVARCHAR(500);
 
-    SET @endpoint_terceros  =   'http://localhost:8083/v3.1/ConectoresImportar?idCompania='
+    SET @endpoint_terceros  =   'http://localhost:8092/v3.1/ConectoresImportar?idCompania='
                             +   @id_compania + '&idSistema=' + @id_sistema
                             +   '&idDocumento=' + @id_documento_tercero
                             +   '&nombreDocumento=' + @nombre_documento_tercero                                            
                             +   '&validarEstructura=' + @validar_estructura;
 
-    SET @endpoint_puntos_envio  =   'http://localhost:8083/v3.1/ConectoresImportar?idCompania='
+    SET @endpoint_puntos_envio  =   'http://localhost:8092/v3.1/ConectoresImportar?idCompania='
                                 +   @id_compania + '&idSistema=' + @id_sistema
                                 +   '&idDocumento=' + @id_documento_punto_envio
                                 +   '&nombreDocumento=' + @nombre_documento_punto_envio                                            
@@ -112,6 +112,7 @@ BEGIN TRY
         F015_CONTACTO           NVARCHAR(255),
         F015_DIRECCION1         NVARCHAR(40),
         F015_DIRECCION2         NVARCHAR(40),
+        F015_DIRECCION3         NVARCHAR(40),
         F015_ID_DEPTO           NVARCHAR(10),
         F015_ID_CIUDAD          NVARCHAR(10),
         F015_TELEFONO           NVARCHAR(20),
@@ -132,6 +133,7 @@ BEGIN TRY
         F015_CONTACTO               NVARCHAR(255),
         F015_DIRECCION1             NVARCHAR(40),
         F015_DIRECCION2             NVARCHAR(40),
+        F015_DIRECCION3             NVARCHAR(40),
         F015_ID_DEPTO               NVARCHAR(10),
         F015_ID_CIUDAD              NVARCHAR(10),
         F015_TELEFONO               NVARCHAR(20),
@@ -189,6 +191,7 @@ BEGIN TRY
         F015_CONTACTO               NVARCHAR(255),
         F015_DIRECCION1             NVARCHAR(40),
         F015_DIRECCION2             NVARCHAR(40),
+        F015_DIRECCION3             NVARCHAR(40),
         F015_ID_DEPTO               NVARCHAR(10),
         F015_ID_CIUDAD              NVARCHAR(10),
         F015_COD_POSTAL             NVARCHAR(10),
@@ -202,11 +205,11 @@ BEGIN TRY
        ============================================= */
     DECLARE @ordenes TABLE
     (
-        id_orden            NVARCHAR(50),
+        id_orden            NVARCHAR(50) PRIMARY KEY,
         orden_obj_origen    NVARCHAR(MAX)
     );
 
-    INSERT INTO @ordenes
+    INSERT INTO @ordenes (id_orden, orden_obj_origen)
     SELECT TOP (@batch_size)
         id_orden,
         orden_obj_origen
@@ -221,7 +224,9 @@ BEGIN TRY
         )
         AND 
         ISNULL(endpoint,'') NOT IN (@endpoint_terceros, @endpoint_puntos_envio)
-    ORDER BY id_orden;  -- Orden para procesamiento consistente
+        AND
+        fecha_creacion >= '2026-06-15'
+    ORDER BY id_orden DESC;  -- Orden para procesamiento consistente
 
     IF @@ROWCOUNT = 0
     BEGIN
@@ -272,8 +277,8 @@ BEGIN TRY
         stateInscription    =   UPPER(JSON_VALUE(orden_obj_origen, '$.clientProfileData.stateInscription')),
         corporatePhone      =   UPPER(JSON_VALUE(orden_obj_origen, '$.clientProfileData.corporatePhone')),
         isCorporate         =   UPPER(JSON_VALUE(orden_obj_origen, '$.clientProfileData.isCorporate')),
-        street              =   UPPER(JSON_VALUE(orden_obj_origen, '$.shippingData.address.street')),
-        complement          =   UPPER(JSON_VALUE(orden_obj_origen, '$.shippingData.address.complement')),
+        street              =   REPLACE(REPLACE(UPPER(JSON_VALUE(orden_obj_origen, '$.shippingData.address.street')), 'CARRERA', 'KRR'), 'CALLE', 'CLL'),
+        complement          =   REPLACE(UPPER(JSON_VALUE(orden_obj_origen, '$.shippingData.address.complement')), 'APARTAMENTO ', 'APT '),
         neighborhood        =   UPPER(JSON_VALUE(orden_obj_origen, '$.shippingData.address.neighborhood')),
         postalCode          =   UPPER(JSON_VALUE(orden_obj_origen, '$.shippingData.address.postalCode')),
         currencyCode        =   UPPER(JSON_VALUE(orden_obj_origen, '$.storePreferencesData.currencyCode')),
@@ -299,6 +304,7 @@ BEGIN TRY
         codigo_postal           NVARCHAR(50),
         direccion_1             NVARCHAR(255),
         direccion_2             NVARCHAR(255),
+        direccion_3             NVARCHAR(255),
         id_departamento         NVARCHAR(10),
         id_ciudad               NVARCHAR(10),
         moneda                  NVARCHAR(10),
@@ -351,30 +357,31 @@ BEGIN TRY
         tipo_documento      =   UPPER(od.documentType),
         telefono            =   REPLACE(REPLACE(od.phone, ' ', ''), '+57', ''),
         codigo_postal       =   od.postalCode,
-        direccion_1         =   LEFT(CONCAT(od.street, ' ', od.complement), 40),
+        direccion_1         =   LEFT(od.street, 40),
         direccion_2         =   LEFT(od.neighborhood, 40),
+        direccion_3         =   LEFT(od.complement, 40),
         id_departamento     =   LEFT(od.postalCode, 2),
         id_ciudad           =   SUBSTRING(od.postalCode, 3, LEN(od.postalCode)),
         moneda              =   od.currencyCode,
         tipo_pago           =   od.paymentSystemName,
         endpoint            =
-            CASE 
-                WHEN    tmm.f200_id IS NOT NULL 
+            CASE
+                WHEN    tmm.f200_id IS NOT NULL
                     THEN    @endpoint_puntos_envio  -- Cliente existe
                 ELSE @endpoint_terceros                                    -- Cliente nuevo
             END,
         cliente_existe      = 
             CASE 
-                WHEN tmm.f200_id IS NOT NULL 
+                WHEN tmm.f200_id IS NOT NULL
                     THEN 1 
                 ELSE 0 
             END
     FROM @order_data od
-    LEFT JOIN [UnoEE_PruebasProyectosCol].[dbo].[t200_mm_terceros] tmm WITH (NOLOCK)
-        ON CASE CAST(CASE WHEN UPPER(od.isCorporate) IN ('TRUE','1') THEN 1 ELSE 0 END AS BIT)
-            WHEN 0 THEN REPLACE(REPLACE(od.document, '.', ''), ' ', '')
-            WHEN 1 THEN REPLACE(REPLACE(od.corporateDocument, '.', ''), ' ', '')
-           END = tmm.f200_id;
+        LEFT JOIN [UnoEE_PruebasProyectosCol].[dbo].[t200_mm_terceros] tmm WITH (NOLOCK)
+            ON tmm.f200_id = CASE WHEN UPPER(od.isCorporate) IN ('TRUE','1') 
+                                  THEN REPLACE(REPLACE(od.corporateDocument, '.', ''), ' ', '') 
+                                  ELSE REPLACE(REPLACE(od.document, '.', ''), ' ', '') 
+                             END;
 
     /* =============================================
        SECCIÓN 1: TERCEROS (Solo si cliente NUEVO)
@@ -394,6 +401,7 @@ BEGIN TRY
         F015_CONTACTO = dfc.nombre_completo,
         F015_DIRECCION1 = dfc.direccion_1,
         F015_DIRECCION2 = dfc.direccion_2,
+        F015_DIRECCION3 = dfc.direccion_3,
         F015_ID_DEPTO = dfc.id_departamento,
         F015_ID_CIUDAD = dfc.id_ciudad,
         F015_TELEFONO = dfc.telefono,
@@ -403,7 +411,7 @@ BEGIN TRY
         F200_ID_CIIU = CASE dfc.es_persona_juridica WHEN 1 THEN @id_ciiu_juridica ELSE @id_ciiu_natural END,
         F015_CELULAR = dfc.telefono
     FROM @ordenes o
-    INNER JOIN @datos_formateados_cliente dfc ON dfc.id_orden = o.id_orden
+        INNER JOIN @datos_formateados_cliente dfc ON dfc.id_orden = o.id_orden
     WHERE dfc.cliente_existe = 0;  -- ← Solo clientes nuevos
 
     /* =============================================
@@ -426,6 +434,7 @@ BEGIN TRY
         F015_CONTACTO = dfc.nombre_completo,
         F015_DIRECCION1 = dfc.direccion_1,
         F015_DIRECCION2 = dfc.direccion_2,
+        F015_DIRECCION3 = dfc.direccion_3,
         F015_ID_DEPTO = dfc.id_departamento,
         F015_ID_CIUDAD = dfc.id_ciudad,
         F015_TELEFONO = dfc.telefono,
@@ -485,28 +494,17 @@ BEGIN TRY
         FROM @ordenes o
             INNER JOIN @datos_formateados_cliente dfc 
                 ON dfc.id_orden = o.id_orden
-            INNER JOIN [UnoEE_PruebasProyectosCol].[dbo].[t200_mm_terceros] t200
-                ON 
-                    CASE CAST(CASE WHEN UPPER(dfc.es_persona_juridica) IN ('TRUE','1') THEN 1 ELSE 0 END AS BIT)
-                        WHEN 0 
-                            THEN REPLACE(REPLACE(dfc.id_persona_natural, '.', ''), ' ', '')
-                        WHEN 1 
-                            THEN REPLACE(REPLACE(dfc.id_persona_juridica, '.', ''), ' ', '')
-                    END = t200.f200_id
-            INNER JOIN [UnoEE_PruebasProyectosCol].[dbo].[t215_mm_puntos_envio_cliente] AS t215
-                ON
-                    t215.f215_rowid_tercero = t200.f200_rowid
-            INNER JOIN [UnoEE_PruebasProyectosCol].[dbo].[t015_mm_contactos] AS t015
-                ON
-                    t015.f015_rowid = t215.f215_rowid_contacto
-                    AND
-                    t015.f015_direccion1 = dfc.direccion_1
-                    AND
-                    t015.f015_direccion2 = dfc.direccion_2
-                    AND
-                    t015.f015_id_depto = dfc.id_departamento
-                    AND
-                    t015.f015_id_ciudad = dfc.id_ciudad
+            INNER JOIN [UnoEE_PruebasProyectosCol].[dbo].[t200_mm_terceros] t200 WITH (NOLOCK)
+                ON t200.f200_id = CASE WHEN dfc.es_persona_juridica = 1 THEN dfc.id_persona_juridica ELSE dfc.id_persona_natural END
+            INNER JOIN [UnoEE_PruebasProyectosCol].[dbo].[t215_mm_puntos_envio_cliente] AS t215 WITH (NOLOCK)
+                ON t215.f215_rowid_tercero = t200.f200_rowid
+            INNER JOIN [UnoEE_PruebasProyectosCol].[dbo].[t015_mm_contactos] AS t015 WITH (NOLOCK)
+                ON t015.f015_rowid = t215.f215_rowid_contacto
+                AND t015.f015_direccion1 = dfc.direccion_1
+                AND t015.f015_direccion2 = dfc.direccion_2
+                AND t015.f015_direccion3 = dfc.direccion_3
+                AND t015.f015_id_depto = dfc.id_departamento
+                AND t015.f015_id_ciudad = dfc.id_ciudad
         WHERE 
             dfc.cliente_existe = 1
     )
@@ -520,6 +518,7 @@ BEGIN TRY
             F015_CONTACTO,
             F015_DIRECCION1,
             F015_DIRECCION2,
+            F015_DIRECCION3,
             F015_ID_DEPTO,
             F015_ID_CIUDAD,
             F015_COD_POSTAL,
@@ -529,31 +528,19 @@ BEGIN TRY
         )
         SELECT DISTINCT
             o.id_orden,
-            F215_ID         =   (
-                SELECT TOP 1 
-                    FORMAT(CAST(f215_id AS INT) + 1, '000')  
-                FROM [UnoEE_PruebasProyectosCol].[dbo].[t215_mm_puntos_envio_cliente]
-                    INNER JOIN [UnoEE_PruebasProyectosCol].[dbo].[t200_mm_terceros] t200
-                        ON 
-                            CASE CAST(CASE WHEN UPPER(dfc.es_persona_juridica) IN ('TRUE','1') THEN 1 ELSE 0 END AS BIT)
-                                WHEN 0 
-                                    THEN REPLACE(REPLACE(dfc.id_persona_natural, '.', ''), ' ', '')
-                                WHEN 1 
-                                    THEN REPLACE(REPLACE(dfc.id_persona_juridica, '.', ''), ' ', '')
-                            END = t200.f200_id
-                WHERE 
-                    f215_rowid_tercero = t200.f200_rowid
-                    AND
-                    FORMAT(CAST(f215_id AS INT) + 1, '000') NOT IN (
-                        SELECT f215_id FROM [UnoEE_PruebasProyectosCol].[dbo].[t215_mm_puntos_envio_cliente] 
-                        WHERE f215_rowid_tercero = t200.f200_rowid
-                    )
-                ORDER BY f215_rowid DESC),
+            F215_ID         = ISNULL((
+                SELECT RIGHT('000' + CAST(ISNULL(MAX(TRY_CAST(pe.f215_id AS INT)), 0) + 1 AS VARCHAR(3)), 3)
+                FROM [UnoEE_PruebasProyectosCol].[dbo].[t215_mm_puntos_envio_cliente] pe WITH (NOLOCK)
+                INNER JOIN [UnoEE_PruebasProyectosCol].[dbo].[t200_mm_terceros] t200 WITH (NOLOCK)
+                    ON pe.f215_rowid_tercero = t200.f200_rowid
+                WHERE t200.f200_id = CASE WHEN dfc.es_persona_juridica = 1 THEN dfc.id_persona_juridica ELSE dfc.id_persona_natural END
+            ), '001'),
             F215_ID_TERCERO = CASE dfc.es_persona_juridica WHEN 1 THEN dfc.id_persona_juridica ELSE dfc.id_persona_natural END,
             F215_DESCRIPCION = dfc.nombre_completo,
             F015_CONTACTO = dfc.nombre_completo,
             F015_DIRECCION1 = dfc.direccion_1,
             F015_DIRECCION2 = dfc.direccion_2,
+            F015_DIRECCION3 = dfc.direccion_3,
             F015_ID_DEPTO = dfc.id_departamento,
             F015_ID_CIUDAD = dfc.id_ciudad,
             F015_COD_POSTAL = LEFT(dfc.codigo_postal, 8),
@@ -571,7 +558,7 @@ BEGIN TRY
         UPDATE ord
         SET
             endpoint = null,
-            id_estado = 2,
+            id_estado = 3,
             orden_obj_destino = null,
             fecha_creacion = GETDATE()
         FROM Ordenes AS ord
@@ -594,7 +581,7 @@ BEGIN TRY
     UPDATE ord
     SET
         endpoint = dfc.endpoint,
-        id_estado = 1,
+        id_estado = 2,
         intentos = 0,
         fecha_creacion = GETDATE(),
         orden_obj_destino = JSON_QUERY(

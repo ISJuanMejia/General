@@ -126,9 +126,9 @@ FROM
 
 SELECT  DISTINCT
     tp.name AS tabla_padre,
-    -- cp.name AS columna_padre,
-    tr.name AS tabla_referenciada--,
-    -- cr.name AS columna_referenciada
+    cp.name AS columna_padre,
+    tr.name AS tabla_referenciada,
+    cr.name AS columna_referenciada
 FROM sys.foreign_keys fk
 INNER JOIN sys.foreign_key_columns fkc
     ON fk.object_id = fkc.constraint_object_id
@@ -145,54 +145,17 @@ INNER JOIN sys.columns cr
 WHERE
     (
         tp.name IN (
-            't101_mc_unidades_medida',
-            't105_mc_criterios_item_planes',
-            't106_mc_criterios_item_mayores',
-            't120_mc_items',
-            't121_mc_items_extensiones'
+            't120_mc_items'
         )
         OR 
         tr.name IN (
-            't101_mc_unidades_medida',
-            't105_mc_criterios_item_planes',
-            't106_mc_criterios_item_mayores',
-            't120_mc_items',
-            't121_mc_items_extensiones'
+            't120_mc_items'
         )
     )
     AND
     (
-        tp.name NOT IN (
-            't11011_mc_oferta_dsctos_linea', 
-            't111_mc_promo_dsctos_linea', 
-            't133_mc_items_pos_arancelaria', 
-            't4955_cm_ppto', 
-            't497_cm_dias_limite_producto',
-            't176_mc_items_controlados',
-            't1343_mc_items_transfor',
-            't058_mm_usuario_entidad',
-            't100_pp_comerciales',
-            't110_mc_promo_dsctos',
-            't1211_mc_items_bloqueo',
-            't427_cm_kanban',
-            't178_mc_items_agl_hi',
-            't1312_mc_items_barras_co',
-            't168_mc_tarifas_ciudad',
-            't155_mc_ubicacion_auxiliares',
-            't163_mc_vehiculos',
-            't135_mc_items_instalacion_key',
-            't172_mc_cfg_serial',
-            't1771_mm_items_restricc_cond'
-        )
-        AND
-        tr.name NOT IN (
-            't172_mc_cfg_serial',
-            't804_mf_segmentos_costos',
-            't010_mm_companias',
-            't109_mc_grupo_dscto',
-            't202_mm_proveedores',
-            't580_ff_fotos'
-        )
+    cp.name = 'f120_rowid_movto_entidad'
+    OR
+    cr.name = 'f120_rowid_movto_entidad'
     )
-
 ORDER BY tp.name;
