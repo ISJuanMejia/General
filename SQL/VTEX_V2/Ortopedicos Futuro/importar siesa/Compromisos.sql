@@ -69,7 +69,7 @@ BEGIN TRY
                            ) + ' - 1'
     FROM dbo.ordenes o WITH (NOLOCK)
     WHERE
-        o.id_estado = 6
+        o.id_estado = 7
         AND (o.intentos <= @num_max_intentos OR o.intentos IS NULL)
         AND ISNULL(o.endpoint, '') <> @endpoint
     ORDER BY o.id_orden DESC;
@@ -94,11 +94,15 @@ BEGIN TRY
                 [Compromisos] = (
                     SELECT DISTINCT
                         f430_consec_docto     = t430.f430_consec_docto,
+                        f431_referencia_item  = '',
+                        /*
                         f431_referencia_item  = ISNULL(CAST(v.v121_id_item AS VARCHAR(50)), ''),
+                        */
                         f431_codigo_barras    = ISNULL(TRIM(v.v121_id_barras_principal), ''),
+                        f431_id_lote            =   '', -- TODO PENDIENTE
                         f431_id_unidad_medida = ISNULL(TRIM(m.f431_id_unidad_medida), 'UN'),
-                        f431_cant_base        = CAST(m.f431_cant1_pedida AS INT),
-                        f431_nro_registro     = m.f431_rowid
+                        f431_cant_base        = CAST(CAST(m.f431_cant1_pedida AS INT) AS VARCHAR(20)),
+                        f431_nro_registro     = CAST(m.f431_rowid AS VARCHAR(50))
                     FROM [UnoEE_PruebasProyectosCol].[dbo].[t431_cm_pv_movto] m WITH (NOLOCK)
                         LEFT JOIN [UnoEE_PruebasProyectosCol].[dbo].[v121] v WITH (NOLOCK)
                             ON v.v121_rowid_item_ext = m.f431_rowid_item_ext
