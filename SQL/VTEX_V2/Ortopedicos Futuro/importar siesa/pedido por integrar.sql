@@ -57,9 +57,10 @@ BEGIN TRY
         orden_obj_origen
     FROM dbo.ordenes WITH (NOLOCK)
     WHERE
-        id_estado = 3
+        id_estado = 4
         AND (intentos <= @num_max_intentos OR intentos IS NULL)
         AND ISNULL(endpoint, '') != @endpoint
+        AND fecha_creacion >= DATEADD(DAY, -7, GETDATE())
     ORDER BY id_orden DESC;
 
     IF NOT EXISTS (SELECT 1 FROM @ordenes)
@@ -68,86 +69,138 @@ BEGIN TRY
     -- ===========================================================
     -- SECCIÓN 3: TRANSFORMACIÓN
     -- ===========================================================
+    DECLARE @order_data TABLE
+    (
+        id_orden            NVARCHAR(50),
+        id                  NVARCHAR(50),
+        email               NVARCHAR(255),
+        firstName           NVARCHAR(100),
+        lastName            NVARCHAR(100),
+        documentType        NVARCHAR(50),
+        document            NVARCHAR(100),
+        orden_tercero       NVARCHAR(100),
+        phone               NVARCHAR(20),
+        corporateName       NVARCHAR(255),
+        tradeName           NVARCHAR(255),
+        corporateDocument   NVARCHAR(255),
+        stateInscription    NVARCHAR(255),
+        corporatePhone      NVARCHAR(255),
+        isCorporate         NVARCHAR(10),
+        street              NVARCHAR(255),
+        complement          NVARCHAR(255),
+        neighborhood        NVARCHAR(255),
+        postalCode          NVARCHAR(50),
+        currencyCode        NVARCHAR(10),
+        paymentSystemName   NVARCHAR(255)
+    );
+
+    INSERT INTO @order_data
+    SELECT 
+        id_orden,
+        UPPER(JSON_VALUE(orden_obj_origen, '$.clientProfileData.id'))                     AS id,
+        LOWER(JSON_VALUE(orden_obj_origen, '$.clientProfileData.email'))                  AS email,
+        UPPER(JSON_VALUE(orden_obj_origen, '$.clientProfileData.firstName'))              AS firstName,
+        UPPER(JSON_VALUE(orden_obj_origen, '$.clientProfileData.lastName'))               AS lastName,
+        UPPER(JSON_VALUE(orden_obj_origen, '$.clientProfileData.documentType'))           AS documentType,
+        UPPER(JSON_VALUE(orden_obj_origen, '$.clientProfileData.document'))               AS document,
+        REPLACE(REPLACE(
+            CASE 
+                WHEN UPPER(JSON_VALUE(orden_obj_origen, '$.clientProfileData.isCorporate')) IN ('TRUE', '1') 
+                THEN JSON_VALUE(orden_obj_origen, '$.clientProfileData.corporateDocument')
+                ELSE JSON_VALUE(orden_obj_origen, '$.clientProfileData.document')
+            END, '.', ''), ' ', '')                                                       AS orden_tercero,
+        UPPER(JSON_VALUE(orden_obj_origen, '$.clientProfileData.phone'))                  AS phone,
+        UPPER(JSON_VALUE(orden_obj_origen, '$.clientProfileData.corporateName'))          AS corporateName,
+        UPPER(JSON_VALUE(orden_obj_origen, '$.clientProfileData.tradeName'))              AS tradeName,
+        UPPER(JSON_VALUE(orden_obj_origen, '$.clientProfileData.corporateDocument'))      AS corporateDocument,
+        UPPER(JSON_VALUE(orden_obj_origen, '$.clientProfileData.stateInscription'))       AS stateInscription,
+        UPPER(JSON_VALUE(orden_obj_origen, '$.clientProfileData.corporatePhone'))         AS corporatePhone,
+        UPPER(JSON_VALUE(orden_obj_origen, '$.clientProfileData.isCorporate'))            AS isCorporate,
+        REPLACE(REPLACE(UPPER(JSON_VALUE(orden_obj_origen, '$.shippingData.address.street')), 'CARRERA', 'KRR'), 'CALLE', 'CLL') AS street,
+        REPLACE(UPPER(JSON_VALUE(orden_obj_origen, '$.shippingData.address.complement')), 'APARTAMENTO ', 'APT ')                 AS complement,
+        UPPER(JSON_VALUE(orden_obj_origen, '$.shippingData.address.neighborhood'))        AS neighborhood,
+        UPPER(JSON_VALUE(orden_obj_origen, '$.shippingData.address.postalCode'))          AS postalCode,
+        UPPER(JSON_VALUE(orden_obj_origen, '$.storePreferencesData.currencyCode'))        AS currencyCode,
+        UPPER(JSON_VALUE(orden_obj_origen, '$.paymentData.transactions[0].payments[0].paymentSystemName'))                       AS paymentSystemName
+    FROM @ordenes;
+
     INSERT INTO @OrdenesDestino (id_orden, endpoint, fecha_creacion, orden_obj_destino)
     SELECT
-        id_orden       = o.id_orden,
-        endpoint       = @endpoint,
-        fecha_creacion = GETDATE(),
-        orden_obj_destino =
+        o.id_orden      AS id_orden,
+        @endpoint       AS endpoint,
+        GETDATE()       AS fecha_creacion,
         (
             SELECT
                 -- ── Pedidos ──────────────────────────────────────────────
                 Pedidos =
                 (
                     SELECT
-                        f430_id_fecha             = CONVERT(VARCHAR(8), GETDATE(), 112),
-                        f430_id_tercero_fact       = JSON_VALUE(o.orden_obj_origen, '$.clientProfileData.document'),
-                        f430_id_tercero_rem        = JSON_VALUE(o.orden_obj_origen, '$.clientProfileData.document'),
-                        f430_id_tipo_cli_fact      =
-                            CASE
-                                WHEN UPPER(JSON_VALUE(o.orden_obj_origen, '$.paymentData.transactions[0].payments[0].paymentSystemName')) LIKE '%ADDI%'
-                                    THEN N'W001'
-                                WHEN JSON_VALUE(o.orden_obj_origen, '$.paymentData.transactions[0].payments[0].paymentSystemName') = N'PayU No Varix'
-                                    THEN N'W005'
-                                WHEN JSON_VALUE(o.orden_obj_origen, '$.paymentData.transactions[0].payments[0].paymentSystemName') LIKE '%Mercado%'
-                                    THEN N'W002'
-                                WHEN JSON_VALUE(o.orden_obj_origen, '$.paymentData.transactions[0].payments[0].paymentSystemName') = N'Pago contra entrega'
-                                    THEN N'W004'
-                                WHEN JSON_VALUE(o.orden_obj_origen, '$.paymentData.transactions[0].payments[0].paymentSystemName') = N'Transferencias'
-                                    THEN N'W006'
-                                ELSE N'W003'
-                            END,
-                        f430_fecha_entrega         = CONVERT(VARCHAR(8), GETDATE(), 112),
-                        f430_notas                 =
-                            CASE
-                                WHEN JSON_VALUE(o.orden_obj_origen, '$.paymentData.transactions[0].payments[0].paymentSystemName') LIKE '%ADDI%'
-                                    THEN CONCAT(
-                                            JSON_VALUE(o.orden_obj_origen, '$.orderId'), N'-',
-                                            JSON_VALUE(o.orden_obj_origen, '$.sequence')
-                                         )
-                                WHEN JSON_VALUE(o.orden_obj_origen, '$.orderId') LIKE '[A-Z]%'
-                                    THEN SUBSTRING(
-                                            JSON_VALUE(o.orden_obj_origen, '$.orderId'),
-                                            CHARINDEX('-', JSON_VALUE(o.orden_obj_origen, '$.orderId')) + 1,
-                                            CHARINDEX('-', JSON_VALUE(o.orden_obj_origen, '$.orderId'),
-                                                CHARINDEX('-', JSON_VALUE(o.orden_obj_origen, '$.orderId')) + 1)
-                                            - CHARINDEX('-', JSON_VALUE(o.orden_obj_origen, '$.orderId')) - 1
-                                         )
-                                ELSE JSON_VALUE(o.orden_obj_origen, '$.sequence')
-                            END,
-                        f430_id_punto_envio        = 
-                        (
-                            SELECT TOP 1
-                                f215_id
-                            FROM [UnoEE_PruebasProyectosCol].[dbo].[t200_mm_terceros]
-                                INNER JOIN [UnoEE_PruebasProyectosCol].[dbo].[t215_mm_puntos_envio_cliente]
-                                    ON  f215_rowid_tercero  =   f200_rowid
-                                INNER JOIN [UnoEE_PruebasProyectosCol].[dbo].[t015_mm_contactos]
-                                    ON
-                                        f215_rowid_contacto =   f015_rowid
-                            WHERE
-                                f200_id         =   JSON_VALUE(o.orden_obj_origen, '$.clientProfileData.document')
-                                AND
-                                f015_id_pais    =   '169'
-                                AND
-                                f015_id_depto   =   LEFT(UPPER(JSON_VALUE(o.orden_obj_origen, '$.shippingData.address.postalCode')), 2)
-                                AND
-                                f015_id_ciudad  =   SUBSTRING(UPPER(JSON_VALUE(o.orden_obj_origen, '$.shippingData.address.postalCode')), 3, LEN(UPPER(JSON_VALUE(o.orden_obj_origen, '$.shippingData.address.postalCode'))))
-                                AND
-                                f015_direccion1 =   LEFT(REPLACE(REPLACE(UPPER(JSON_VALUE(o.orden_obj_origen, '$.shippingData.address.street')), 'CARRERA', 'KRR'), 'CALLE', 'CLL'), 40)
-                                AND
-                                f015_direccion2 =   LEFT(UPPER(JSON_VALUE(o.orden_obj_origen, '$.shippingData.address.neighborhood')), 40)
-                                AND
-                                f015_direccion3 =   LEFT(REPLACE(UPPER(JSON_VALUE(o.orden_obj_origen, '$.shippingData.address.complement')), 'APARTAMENTO ', 'APT '), 40)
-                        ),
-                        f430_num_docto_referencia  =
-                            LEFT(
-                                CONCAT(
-                                    JSON_VALUE(o.orden_obj_origen, '$.orderId'),
-                                    N' (', JSON_VALUE(o.orden_obj_origen, '$.sequence'), N')'
-                                ),
-                                50
-                            ) + ' - 1'
+                        CONVERT(VARCHAR(8), GETDATE(), 112) AS f430_id_fecha,
+                        od.orden_tercero                    AS f430_id_tercero_fact,
+                        od.orden_tercero                    AS f430_id_tercero_rem,
+                        CASE
+                            WHEN od.paymentSystemName LIKE '%ADDI%'
+                                THEN N'W001'
+                            WHEN od.paymentSystemName = N'PayU No Varix'
+                                THEN N'W005'
+                            WHEN od.paymentSystemName LIKE '%Mercado%'
+                                THEN N'W002'
+                            WHEN od.paymentSystemName = N'Pago contra entrega'
+                                THEN N'W004'
+                            WHEN od.paymentSystemName = N'Transferencias'
+                                THEN N'W006'
+                            ELSE N'W003'
+                        END                                 AS f430_id_tipo_cli_fact,
+                        CONVERT(VARCHAR(8), GETDATE(), 112) AS f430_fecha_entrega,
+                        CASE
+                            WHEN od.paymentSystemName LIKE '%ADDI%'
+                                THEN CONCAT(
+                                        JSON_VALUE(o.orden_obj_origen, '$.orderId'), N'-',
+                                        JSON_VALUE(o.orden_obj_origen, '$.sequence')
+                                     )
+                            WHEN JSON_VALUE(o.orden_obj_origen, '$.orderId') LIKE '[A-Z]%'
+                                THEN SUBSTRING(
+                                        JSON_VALUE(o.orden_obj_origen, '$.orderId'),
+                                        CHARINDEX('-', JSON_VALUE(o.orden_obj_origen, '$.orderId')) + 1,
+                                        CHARINDEX('-', JSON_VALUE(o.orden_obj_origen, '$.orderId'),
+                                            CHARINDEX('-', JSON_VALUE(o.orden_obj_origen, '$.orderId')) + 1)
+                                        - CHARINDEX('-', JSON_VALUE(o.orden_obj_origen, '$.orderId')) - 1
+                                     )
+                            ELSE JSON_VALUE(o.orden_obj_origen, '$.sequence')
+                        END                                 AS f430_notas,
+                        ISNULL(
+                            (
+                                SELECT TOP 1
+                                    f215_id
+                                FROM [UnoEE_PruebasProyectosCol].[dbo].[t200_mm_terceros]
+                                    INNER JOIN [UnoEE_PruebasProyectosCol].[dbo].[t215_mm_puntos_envio_cliente]
+                                        ON  f215_rowid_tercero  =   f200_rowid
+                                    INNER JOIN [UnoEE_PruebasProyectosCol].[dbo].[t015_mm_contactos]
+                                        ON  f215_rowid_contacto =   f015_rowid
+                                WHERE
+                                    f200_id         =   od.orden_tercero
+                                    AND
+                                    f015_id_pais    =   '169'
+                                    AND
+                                    f015_id_depto   =   LEFT(od.postalCode, 2)
+                                    AND
+                                    f015_id_ciudad  =   SUBSTRING(od.postalCode, 3, LEN(od.postalCode))
+                                    AND
+                                    ISNULL(f015_direccion1, '') =   ISNULL(LEFT(od.street, 40), '')
+                                    AND
+                                    ISNULL(f015_direccion2, '') =   ISNULL(LEFT(od.neighborhood, 40), '')
+                                    AND
+                                    ISNULL(f015_direccion3, '') =   ISNULL(LEFT(od.complement, 40), '')
+                            ),
+                            '001'
+                        )                                   AS f430_id_punto_envio,
+                        LEFT(
+                            CONCAT(
+                                JSON_VALUE(o.orden_obj_origen, '$.orderId'),
+                                N' (', JSON_VALUE(o.orden_obj_origen, '$.sequence'), N')'
+                            ),
+                            50
+                        ) + ' - 1'                          AS f430_num_docto_referencia
                     FOR JSON PATH
                 ),
 
@@ -160,7 +213,7 @@ BEGIN TRY
                     FROM
                     (
                         SELECT
-                        ROW_NUMBER() OVER (ORDER BY CAST(item.[key] AS INT))
+                        CAST(ROW_NUMBER() OVER (ORDER BY CAST(item.[key] AS INT)) AS VARCHAR(10))
                             AS f431_nro_registro,
                         N''
                             AS f431_referencia_item,
@@ -174,7 +227,7 @@ BEGIN TRY
                             AS f431_fecha_entrega,
                         ISNULL(LTRIM(RTRIM(v121.v121_id_unidad_inventario)), N'UN')
                             AS f431_id_unidad_medida,
-                        JSON_VALUE(item.value, '$.quantity')
+                        CAST(JSON_VALUE(item.value, '$.quantity') AS VARCHAR(20))
                             AS f431_cant_pedida_base,
                         @id_lista_precio
                             AS f431_id_lista_precio,
@@ -187,11 +240,11 @@ BEGIN TRY
                             AS f431_precio_unitario,
                         CASE
                             WHEN ISNULL(TRY_CAST(JSON_VALUE(item.value, '$.sellingPrice') AS DECIMAL(18,2)), 0) = 0
-                                THEN 1 ELSE 0
+                                THEN N'1' ELSE N'0'
                         END AS f431_ind_obsequio,
                         CASE
                             WHEN ISNULL(TRY_CAST(JSON_VALUE(item.value, '$.sellingPrice') AS DECIMAL(18,2)), 0) = 0
-                                THEN 1 ELSE 0
+                                THEN N'1' ELSE N'0'
                         END AS f431_ind_impto_asumido,
                         CASE
                             WHEN ISNULL(TRY_CAST(JSON_VALUE(item.value, '$.sellingPrice') AS DECIMAL(18,2)), 0) = 0
@@ -204,7 +257,7 @@ BEGIN TRY
                             ELSE N''
                         END AS f431_id_ccosto_movto,
                         CASE
-                            WHEN JSON_VALUE(o.orden_obj_origen, '$.paymentData.transactions[0].payments[0].paymentSystemName') LIKE '%ADDI%'
+                            WHEN od.paymentSystemName LIKE '%ADDI%'
                                 THEN CONCAT(
                                         JSON_VALUE(o.orden_obj_origen, '$.orderId'), N'-',
                                         JSON_VALUE(o.orden_obj_origen, '$.sequence')
@@ -232,13 +285,13 @@ BEGIN TRY
 
                     -- CORRECCIÓN 4: ítem de envío con los 4 campos de obsequio presentes
                     SELECT
-                        @nro_registro_envio     AS f431_nro_registro,
+                        CAST(@nro_registro_envio AS VARCHAR(10)) AS f431_nro_registro,
                         @id_item_envio          AS f431_referencia_item,
                         N''                     AS f431_codigo_barras,
                         CONVERT(VARCHAR(8), GETDATE(), 112)
                                                 AS f431_fecha_entrega,
                         N'UN'                   AS f431_id_unidad_medida,
-                        1                       AS f431_cant_pedida_base,
+                        N'1'                    AS f431_cant_pedida_base,
                         @id_lista_precio        AS f431_id_lista_precio,
                         ISNULL((
                             SELECT CAST(JSON_VALUE(total.value, '$.value') AS BIGINT) / 100
@@ -246,8 +299,8 @@ BEGIN TRY
                             WHERE JSON_VALUE(total.value, '$.id') = N'Shipping'
                         ), 0)                   AS f431_precio_unitario,
                         -- Envío nunca es obsequio → valores normales
-                        0                       AS f431_ind_obsequio,
-                        0                       AS f431_ind_impto_asumido,
+                        N'0'                    AS f431_ind_obsequio,
+                        N'0'                    AS f431_ind_impto_asumido,
                         @id_motivo_normal       AS f431_id_motivo,
                         N''                     AS f431_id_ccosto_movto,
                         N'Shipping'             AS f431_notas
@@ -284,8 +337,9 @@ BEGIN TRY
                 )
 
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
-        )
-    FROM @ordenes AS o;
+        ) AS orden_obj_destino
+    FROM @ordenes AS o
+    INNER JOIN @order_data AS od ON o.id_orden = od.id_orden;
 
     -- ===========================================================
     -- SECCIÓN 4: UPDATE
@@ -293,7 +347,6 @@ BEGIN TRY
     UPDATE o
     SET
         o.endpoint          =   d.endpoint,
-        o.id_estado         =   4,
         o.intentos          =   0,
         o.fecha_creacion    =   d.fecha_creacion,
         o.orden_obj_destino =   d.orden_obj_destino

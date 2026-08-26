@@ -72,6 +72,9 @@ BEGIN TRY
         o.id_estado = 7
         AND (o.intentos <= @num_max_intentos OR o.intentos IS NULL)
         AND ISNULL(o.endpoint, '') <> @endpoint
+        /*
+        id_orden = '1651520583072-01'
+        */
     ORDER BY o.id_orden DESC;
 
     IF @@ROWCOUNT = 0
@@ -83,6 +86,13 @@ BEGIN TRY
     /* =============================================
        ACTUALIZACIÓN FINAL Y CONSTRUCCIÓN DE JSON
        ============================================= */
+    /*
+    SELECT
+        endpoint          =   @endpoint,
+        intentos          =   0,
+        fecha_creacion    =   GETDATE(),
+        orden_obj_destino = 
+    */
     UPDATE o
     SET
         o.endpoint          =   @endpoint,
@@ -99,13 +109,57 @@ BEGIN TRY
                         f431_referencia_item  = ISNULL(CAST(v.v121_id_item AS VARCHAR(50)), ''),
                         */
                         f431_codigo_barras    = ISNULL(TRIM(v.v121_id_barras_principal), ''),
-                        f431_id_lote            =   '', -- TODO PENDIENTE
+                        f431_id_lote          = ISNULL(c.f431_id_lote, ''),
                         f431_id_unidad_medida = ISNULL(TRIM(m.f431_id_unidad_medida), 'UN'),
                         f431_cant_base        = CAST(CAST(m.f431_cant1_pedida AS INT) AS VARCHAR(20)),
                         f431_nro_registro     = CAST(m.f431_rowid AS VARCHAR(50))
                     FROM [UnoEE_PruebasProyectosCol].[dbo].[t431_cm_pv_movto] m WITH (NOLOCK)
                         LEFT JOIN [UnoEE_PruebasProyectosCol].[dbo].[v121] v WITH (NOLOCK)
                             ON v.v121_rowid_item_ext = m.f431_rowid_item_ext
+                        OUTER APPLY (
+                            SELECT TOP (1) 
+                                f431_id_lote = TRIM(
+                                    CASE 
+                                        -- 1. Si el ítem maneja Serial (v121_ind_serial <> 0)
+                                        WHEN v.v121_ind_serial <> 0 THEN
+                                            (
+                                                SELECT TOP (1) s.f417_id
+                                                FROM [UnoEE_PruebasProyectosCol].[dbo].[t407_cm_compromisos_serial] cs WITH (NOLOCK)
+                                                    INNER JOIN [UnoEE_PruebasProyectosCol].[dbo].[t405_cm_compromisos] comp WITH (NOLOCK)
+                                                        ON comp.f405_rowid = cs.f407_rowid_compromiso
+                                                    INNER JOIN [UnoEE_PruebasProyectosCol].[dbo].[t417_cm_seriales] s WITH (NOLOCK)
+                                                        ON s.f417_rowid = cs.f407_rowid_serial
+                                                WHERE comp.f405_rowid_pv_movto = m.f431_rowid
+                                            )
+
+                                        -- 2. Si el ítem maneja Lote (v121_ind_lote <> 0)
+                                        WHEN v.v121_ind_lote <> 0 THEN
+                                            COALESCE(
+                                                -- 2a. Lote del compromiso con existencia > 0 en t403
+                                                (
+                                                    SELECT TOP (1) comp.f405_id_lote
+                                                    FROM [UnoEE_PruebasProyectosCol].[dbo].[t405_cm_compromisos] comp WITH (NOLOCK)
+                                                        LEFT JOIN [UnoEE_PruebasProyectosCol].[dbo].[t403_cm_lotes] l403 WITH (NOLOCK)
+                                                            ON l403.f403_rowid_item_ext = comp.f405_rowid_item_ext 
+                                                           AND l403.f403_id = comp.f405_id_lote
+                                                    WHERE comp.f405_rowid_pv_movto = m.f431_rowid
+                                                      AND NULLIF(TRIM(comp.f405_id_lote), '') IS NOT NULL
+                                                      AND ISNULL(l403.f403_cant_existencia_1, 1) > 0
+                                                    ORDER BY comp.f405_rowid DESC
+                                                ),
+                                                -- 2b. Lote disponible directo con existencia > 0
+                                                (
+                                                    SELECT TOP (1) l403.f403_id
+                                                    FROM [UnoEE_PruebasProyectosCol].[dbo].[t403_cm_lotes] l403 WITH (NOLOCK)
+                                                    WHERE l403.f403_rowid_item_ext = m.f431_rowid_item_ext
+                                                      AND l403.f403_cant_existencia_1 > 0
+                                                    ORDER BY l403.f403_fecha_vcto ASC
+                                                )
+                                            )
+                                        ELSE NULL
+                                    END
+                                )
+                        ) c
                     WHERE m.f431_rowid_pv_docto = t430.f430_rowid
                     FOR JSON PATH
                 )
