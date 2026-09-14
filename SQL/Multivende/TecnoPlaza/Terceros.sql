@@ -83,6 +83,9 @@ BEGIN TRY
 					END
 			END 
 		)
+		/*
+		IdOrder IN ('4b7171e7-efe7-4803-b088-a71dddfc57ff', 'c52363f4-119d-4fe6-aaf7-41ca6941cf7f', '4aa792f0-ad1d-4082-9a3f-c932495937d7')
+		*/
 	ORDER BY ID DESC;
 	
 	DECLARE	@ordenes	TABLE
@@ -121,7 +124,7 @@ BEGIN TRY
 					AND
 					LEN(
 						JSON_VALUE(Order_jsonApi, '$.Client.taxId')
-					)	>=	10
+					)	>=	9
 					THEN	2
 				ELSE	1
 			END,
@@ -177,10 +180,36 @@ BEGIN TRY
 		f015_celular				NVARCHAR(20)
 	);
 
-	IF OBJECT_ID('tempdb..#company_impuestos') IS NOT NULL DROP TABLE #company_impuestos;
-	IF OBJECT_ID('tempdb..#company_criterios') IS NOT NULL DROP TABLE #company_criterios;
-	IF OBJECT_ID('tempdb..#company_entidadTercero') IS NOT NULL DROP TABLE #company_entidadTercero;
-	IF OBJECT_ID('tempdb..#company_entidadCliente')	IS NOT NULL DROP TABLE #company_entidadCliente;
+	DECLARE @impuestos	TABLE
+	(
+		F_TIPO_REG         VARCHAR(4),
+		F_ID_TERCERO       VARCHAR(255),
+		F_ID_CLASE         VARCHAR(255)
+	);
+
+	DECLARE @criterios TABLE
+	(
+		F207_ID_TERCERO        VARCHAR(255),
+		F207_ID_CRITERIO_MAYOR VARCHAR(255)
+	);
+
+	DECLARE @entidadTercero TABLE
+	(
+		f200_id                 VARCHAR(255),
+		f753_id_entidad         VARCHAR(255),
+		f753_id_atributo        VARCHAR(255),
+		f753_id_maestro         VARCHAR(255),
+		f753_id_maestro_detalle VARCHAR(255)
+	);
+
+	DECLARE @entidadCliente TABLE
+	(
+		f201_id_tercero         VARCHAR(255),
+		f753_id_entidad         VARCHAR(255),
+		f753_id_atributo        VARCHAR(255),
+		f753_id_maestro         VARCHAR(255),
+		f753_id_maestro_detalle VARCHAR(255)
+	);
 
 	--->	VARIABLES GENERALES
 	DECLARE @pais_siesa		NVARCHAR(3),
@@ -636,62 +665,43 @@ BEGIN TRY
 			WHERE 
 				Orden	=	@counter;
 
-			--Creamos la tabla de los impuestos
-			CREATE TABLE #company_impuestos (
-				F_TIPO_REG         VARCHAR(255),
-				F_ID_TERCERO       VARCHAR(255),
-				F_ID_CLASE         VARCHAR(255),
-				F_ID_VALOR_TERCERO VARCHAR(255)
-			);
-
 			-- IMPUESTOS Y RETENCIONES
-			INSERT INTO #company_impuestos (
+			INSERT INTO @impuestos (
 				F_TIPO_REG,
 				F_ID_TERCERO,
 				F_ID_CLASE
 			)
-			SELECT 
-				'46'		AS	F_TIPO_REG,
-				@id_tercero	AS	F_ID_TERCERO,
-				'1'			AS	F_ID_CLASE
+			SELECT
+				F_TIPO_REG		=	'46',
+				F_ID_TERCERO	=	@id_tercero,
+				F_ID_CLASE		=	'1'
 			UNION ALL
-			SELECT 
-				'47'		AS	F_TIPO_REG,
-				@id_tercero	AS	F_ID_TERCERO,
-				'41'		AS	F_ID_CLASE
-
-			--Creamos la tabla de los Criterios Clasificacion
-			CREATE TABLE #company_criterios (
-				F207_ID_TERCERO        VARCHAR(255),
-				F207_ID_CRITERIO_MAYOR VARCHAR(255)
-			);
+			SELECT
+				F_TIPO_REG		=	'47',
+				F_ID_TERCERO	= 	@id_tercero,
+				F_ID_CLASE		=	'41';
 			
 			-- CRITERIOS CLASIFICACION
-	  		INSERT INTO #company_criterios (
+	  		INSERT INTO @criterios (
 				F207_ID_TERCERO,
 				F207_ID_CRITERIO_MAYOR
 	  		)
 	  		SELECT
-				@id_tercero														                  AS	F207_ID_TERCERO,
-				CASE origen
-					WHEN 'shopify' THEN '107'
-					WHEN 'fcom' THEN '102'
-					WHEN 'mercadolibre' THEN '101'
-				END                                                                             AS    F207_ID_CRITERIO_MAYOR
+				F207_ID_TERCERO			=	@id_tercero,
+				F207_ID_CRITERIO_MAYOR	=	
+					CASE origen
+						WHEN	'shopify' 
+							THEN	'107'
+						WHEN	'fcom' 
+							THEN	'102'
+						WHEN	'mercadolibre' 
+							THEN	'101'
+					END
 			FROM @ordenes
       		WHERE
 				Orden = @counter;
 
-	  		--ENT. DINAMICA TERCERO
-			CREATE TABLE #company_entidadTercero (
-				f200_id                 VARCHAR(255),
-				f753_id_entidad         VARCHAR(255),
-				f753_id_atributo        VARCHAR(255),
-				f753_id_maestro         VARCHAR(255),
-				f753_id_maestro_detalle VARCHAR(255)
-			);
-
-			INSERT INTO #company_entidadTercero (
+			INSERT INTO @entidadTercero (
 				f200_id,
 				f753_id_entidad,
 				f753_id_atributo,
@@ -716,16 +726,7 @@ BEGIN TRY
 			FROM @ordenes
 			WHERE Orden = @counter;
 
-			-- ENT. DINAMICAS CLIENTE
-			CREATE TABLE #company_entidadCliente(
-				f201_id_tercero         VARCHAR(255),
-				f753_id_entidad         VARCHAR(255),
-				f753_id_atributo        VARCHAR(255),
-				f753_id_maestro         VARCHAR(255),
-				f753_id_maestro_detalle VARCHAR(255)
-			);
-
-			INSERT INTO #company_entidadCliente (
+			INSERT INTO @entidadCliente (
 				f201_id_tercero,
 				f753_id_entidad,
 				f753_id_atributo,
@@ -781,25 +782,25 @@ BEGIN TRY
 						),
 						[ImptosReten]		=	(
 							SELECT *
-							FROM #company_impuestos
+							FROM @impuestos
 							FOR JSON PATH
 							,INCLUDE_NULL_VALUES
 						),
 						[CriteriosClientes]	=	(
 							SELECT *
-							FROM #company_criterios
+							FROM @criterios
 							FOR JSON PATH
 							,INCLUDE_NULL_VALUES
 						),
 						[EntDinamicaTercero]	=	(
 							SELECT *
-							FROM #company_entidadTercero
+							FROM @entidadTercero
 							FOR JSON PATH
 							,INCLUDE_NULL_VALUES
 						),
 						[EntDinamicaCliente]	=	(
 							SELECT *
-							FROM #company_entidadCliente
+							FROM @entidadCliente
 							FOR JSON PATH
 							,INCLUDE_NULL_VALUES
 						)
@@ -812,10 +813,10 @@ BEGIN TRY
 		END CATCH
 		DELETE @terceros;
 		DELETE @cliente;
-		IF OBJECT_ID('tempdb..#company_impuestos') IS NOT NULL DROP TABLE #company_impuestos;
-		IF OBJECT_ID('tempdb..#company_criterios') IS NOT NULL DROP TABLE #company_criterios;
-		IF OBJECT_ID('tempdb..#company_entidadTercero') IS NOT NULL DROP TABLE #company_entidadTercero;
-		IF OBJECT_ID('tempdb..#company_entidadCliente')	IS NOT NULL DROP TABLE #company_entidadCliente;
+		DELETE @impuestos;
+		DELETE @criterios;
+		DELETE @entidadTercero;
+		DELETE @entidadCliente;
 		SET @counter = @counter + 1;
 	END
 

@@ -167,7 +167,7 @@ BEGIN TRY
 	FROM Orders   
 	WHERE
 		/*
-		IdOrder = '9aafdf7c-5920-41ee-9c1e-6c12620682f1' 
+		IdOrder IN ('4b7171e7-efe7-4803-b088-a71dddfc57ff', 'c52363f4-119d-4fe6-aaf7-41ca6941cf7f', '4aa792f0-ad1d-4082-9a3f-c932495937d7', 'c2d515cd-58ee-4329-8d11-e50f644756a3')
 		*/
 		IdEstado = 3
 		AND 
@@ -216,6 +216,7 @@ BEGIN TRY
 	WHILE @counter <= @total
 	BEGIN
 		BEGIN TRY
+			DECLARE @tipo_tercero	INT	=	NULL;
 			--Obtenemos el id de la orden y el tercero
 			SELECT
 				@order		=	IdOrder,
@@ -229,7 +230,8 @@ BEGIN TRY
 									ELSE documentoTer
 								END 
 						ELSE	documentoTer
-					END
+					END,
+				@tipo_tercero	=	tipoTercero
 			FROM @ordenes
 			WHERE
 				Orden	=	@counter;
@@ -309,11 +311,17 @@ BEGIN TRY
 					'   Bodega: ', JSON_VALUE(Order_jsonApi, '$.Warehouse.name')
 				)                                                                                      AS	f430_notas,
 				'' 									                                                   AS	f430_id_tercero_vendedor,
-				CASE 
-					WHEN	LEN(UPPER(JSON_VALUE(Order_jsonApi, '$.Client.fullName'))) > 50 
-						THEN	ISNULL(LEFT(UPPER(JSON_VALUE(Order_jsonApi, '$.Client.fullName')), 50),'')
-					ELSE 	ISNULL(UPPER(JSON_VALUE(Order_jsonApi, '$.Client.fullName')),'')
-		   		END                                                                                     AS   f419_contacto
+				f419_contacto	=
+					CASE	@tipo_tercero
+						WHEN	1
+							THEN
+								CASE 
+									WHEN	LEN(UPPER(JSON_VALUE(Order_jsonApi, '$.Client.fullName'))) > 50 
+										THEN	ISNULL(LEFT(UPPER(JSON_VALUE(Order_jsonApi, '$.Client.fullName')), 50),'')
+									ELSE 	ISNULL(UPPER(JSON_VALUE(Order_jsonApi, '$.Client.fullName')),'')
+								END
+						ELSE	REPLACE(JSON_VALUE(Order_jsonApi, '$.Client.name'),'&','')
+					END
 			INTO #company_Pedidos
 			FROM @ordenes
 			WHERE Orden = @counter;
