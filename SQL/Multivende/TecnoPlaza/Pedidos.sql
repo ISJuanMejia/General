@@ -17,10 +17,11 @@ BEGIN TRY
 	);
 
 	--->	Tablas
-	IF	OBJECT_ID('tempdb..##company_OrdenesCreadas')	IS NOT NULL DROP TABLE ##company_OrdenesCreadas;
+	IF	OBJECT_ID('tempdb..#company_OrdenesCreadas')	IS NOT NULL DROP TABLE #company_OrdenesCreadas;
 	IF	OBJECT_ID('tempdb..#company_Pedidos')			IS NOT NULL DROP TABLE #company_Pedidos;
 	IF	OBJECT_ID('tempdb..#company_Movimientos')		IS NOT NULL DROP TABLE #company_Movimientos;
 	IF	OBJECT_ID('tempdb..#company_Descuentos')		IS NOT NULL DROP TABLE #company_Descuentos;
+	IF	OBJECT_ID('tempdb..#ItemsUnidad')				IS NOT NULL DROP TABLE #ItemsUnidad;
 
 	DECLARE @ImpuestoGI	TABLE 
 	(
@@ -32,30 +33,38 @@ BEGIN TRY
 
 	DECLARE @counter		INT				=	1;
 	DECLARE @total			INT;
-	DECLARE @tmpDescuento	TABLE ([row]	INT,amount	NVARCHAR(20))
-	DECLARE @json			VARCHAR(MAX)	=	'';
 	DECLARE @order			NVARCHAR(50);
-	DECLARE @tercero		NVARCHAR(50);		
-	DECLARE @conexion		NVARCHAR(MAX)	=	(SELECT TOP 1 cadena_conexion FROM Conexiones)
-	DECLARE @base_datos		NVARCHAR(MAX)	=	(SELECT TOP 1 base_datos FROM Conexiones)
-	DECLARE @tabla			NVARCHAR(MAX)	=	@base_datos + '.dbo.t430_cm_pv_docto WHERE f430_ind_estado != 9 AND f430_id_cia = 1'
+	DECLARE @tercero		NVARCHAR(50);
+	DECLARE @tipo_tercero	INT				=	NULL;
+	DECLARE @conexion		NVARCHAR(MAX)	=	(SELECT TOP 1 cadena_conexion FROM dbo.Conexiones);
+	DECLARE @base_datos		NVARCHAR(MAX)	=	(SELECT TOP 1 base_datos FROM dbo.Conexiones);
 
-	--Obtiene los pedidos ya procesados en el ERP
-	EXEC('
-		SELECT DISTINCT
-			f430_referencia 
-		INTO ##company_OrdenesCreadas 
-		FROM OPENROWSET(
-			''SQLNCLI''
-			, ''' + @conexion + '''
-			, ''
-				SELECT
-					f430_referencia
-				FROM ' + @tabla + '''
-		)'
+	IF @conexion IS NULL OR @base_datos IS NULL
+	BEGIN
+		RAISERROR('No se encontró configuración en la tabla Conexiones.', 16, 1);
+		RETURN;
+	END
+
+	DECLARE @tabla NVARCHAR(MAX) = @base_datos + '.dbo.t430_cm_pv_docto WHERE f430_ind_estado != 9 AND f430_id_cia = 1';
+
+	-- Pre-crear tabla temporal local de pedidos ya procesados en ERP
+	CREATE TABLE #company_OrdenesCreadas
+	(
+		f430_referencia NVARCHAR(100)
 	);
 
-	--Actualizamos el estado de los registros ya procesados 
+	DECLARE @sqlCreadas NVARCHAR(MAX) = N'
+	INSERT INTO #company_OrdenesCreadas (f430_referencia)
+	SELECT DISTINCT f430_referencia 
+	FROM OPENROWSET(
+		''SQLNCLI'',
+		''' + REPLACE(@conexion, '''', '''''') + ''',
+		''SELECT f430_referencia FROM ' + @tabla + '''
+	);';
+
+	EXEC sp_executesql @sqlCreadas;
+
+	-- Actualizamos el estado de los registros ya procesados en ERP a IdEstado = 4
 	UPDATE o
 	SET
 		o.IdEstado	=	4
@@ -97,17 +106,32 @@ BEGIN TRY
 								END
 						END AS referenciaEsperada
 				) r
-				JOIN ##company_OrdenesCreadas oc
+				JOIN #company_OrdenesCreadas oc
 					ON oc.f430_referencia = r.referenciaEsperada
 		);
 
-	--GRUPOS IMPOSITIVOS
-	-- Variable para query de ejecución vía rowset para clientes SIESA.
-	DECLARE @queryClientesSiesa NVARCHAR(MAX)
+	-- Pre-cargar catálogo de unidades de inventario de ítems de Siesa (fuera del bucle)
+	CREATE TABLE #ItemsUnidad
+	(
+		f120_referencia           NVARCHAR(50) NOT NULL PRIMARY KEY,
+		f120_id_unidad_inventario NVARCHAR(10) NULL
+	);
 
-	-- La consulta que extrae los datos de los terceros clientes de SIESA Activos.
-	SET @queryClientesSiesa = 
-	N'
+	DECLARE @sqlItems NVARCHAR(MAX) = N'
+	INSERT INTO #ItemsUnidad (f120_referencia, f120_id_unidad_inventario)
+	SELECT 
+		RTRIM(f120_referencia), 
+		f120_id_unidad_inventario
+	FROM OPENROWSET(
+		''SQLNCLI'',
+		''' + REPLACE(@conexion, '''', '''''') + ''',
+		''SELECT f120_referencia, f120_id_unidad_inventario FROM ' + @base_datos + '.dbo.t120_mc_items WHERE f120_id_cia = 1''
+	);';
+
+	EXEC sp_executesql @sqlItems;
+
+	-- GRUPOS IMPOSITIVOS (Tasas de impuesto por ítem)
+	DECLARE @queryClientesSiesa NVARCHAR(MAX) = N'
 	SELECT
 		f120_id_cia, 
 		f120_referencia, 
@@ -115,27 +139,27 @@ BEGIN TRY
 		f037_tasa
 	FROM OPENROWSET(
 		''SQLNCLI'', 
-		'''+@conexion+''',
+		''' + REPLACE(@conexion, '''', '''''') + ''',
 		''
 		SELECT
 			t120.f120_id_cia AS f120_id_cia, 
 			RTRIM(t120.f120_referencia) AS f120_referencia, 
 			t037.f037_id AS f037_id, 
 			t037.f037_tasa AS f037_tasa
-		FROM '+ @base_datos +'.dbo.t120_mc_items t120
-		INNER JOIN	'+ @base_datos +'.dbo.t114_mc_grupos_impo_impuestos t114 ON t114.f114_id_cia = t120.f120_id_cia  
-		AND t114.f114_grupo_impositivo = t120.f120_id_grupo_impositivo AND t114.f114_ind_tipo_indicador = 3
-		INNER JOIN	'+ @base_datos +'.dbo.t037_mm_llaves_impuesto t037 ON t037.f037_id_cia = t114.f114_id_cia
-		AND t114.f114_id_llave_impuesto = t037.f037_id
+		FROM ' + @base_datos + '.dbo.t120_mc_items t120
+		INNER JOIN ' + @base_datos + '.dbo.t114_mc_grupos_impo_impuestos t114 
+			ON t114.f114_id_cia = t120.f120_id_cia  
+		   AND t114.f114_grupo_impositivo = t120.f120_id_grupo_impositivo 
+		   AND t114.f114_ind_tipo_indicador = 3
+		INNER JOIN ' + @base_datos + '.dbo.t037_mm_llaves_impuesto t037 
+			ON t037.f037_id_cia = t114.f114_id_cia
+		   AND t114.f114_id_llave_impuesto = t037.f037_id
 		ORDER BY t120.f120_referencia ASC
 		''
-	)
-	'
+	);';
 
 	INSERT INTO @ImpuestoGI
-	EXEC (@queryClientesSiesa);
-	
-	PRINT('llenar datos')
+	EXEC sp_executesql @queryClientesSiesa;
 
 	DECLARE	@ordenes	TABLE
 	(
@@ -143,32 +167,25 @@ BEGIN TRY
 		Order_jsonApi	NVARCHAR(MAX),
 		Orden			INT,
 		documentoTer	NVARCHAR(100),
-		tipoTercero		NVARCHAR(100)
+		tipoTercero		INT
 	);
 
-	--Filtramos por los registros a ser procesados
+	-- Filtramos por los registros a ser procesados
 	INSERT INTO @ordenes
 	SELECT TOP 25
 		[IdOrder]		=	IdOrder,
 		[Order_jsonApi]	=	Order_jsonApi,
-		[Orden]			=	ROW_NUMBER() OVER (ORDER BY (SELECT IdOrder)),
+		[Orden]			=	ROW_NUMBER() OVER (ORDER BY IdOrder),
 		[documentoTer]	=	dbo.OnlyNumbers(JSON_VALUE(Order_jsonApi, '$.Client.taxId')),
 		[tipoTercero]	=
 			CASE
-				WHEN
-					JSON_VALUE(Order_jsonApi, '$.Client.taxId')	LIKE	'[789]%'
-					AND
-					LEN(
-						JSON_VALUE(Order_jsonApi, '$.Client.taxId')
-					)	>=	10
-					THEN	2
-				ELSE	1
+				WHEN JSON_VALUE(Order_jsonApi, '$.Client.taxId') LIKE '[789]%'
+				 AND LEN(JSON_VALUE(Order_jsonApi, '$.Client.taxId')) >= 9
+					THEN 2
+				ELSE 1
 			END
 	FROM Orders   
 	WHERE
-		/*
-		IdOrder IN ('4b7171e7-efe7-4803-b088-a71dddfc57ff', 'c52363f4-119d-4fe6-aaf7-41ca6941cf7f', '4aa792f0-ad1d-4082-9a3f-c932495937d7', 'c2d515cd-58ee-4329-8d11-e50f644756a3')
-		*/
 		IdEstado = 3
 		AND 
 		Intentos <= 1 
@@ -193,50 +210,51 @@ BEGIN TRY
 				DATENAME(TzOffset, SYSDATETIMEOFFSET())
 			) > 
 			CASE
-				WHEN   JSON_VALUE(Order_jsonApi, '$.Warehouse.name')   IN   ('Bodega Ingram', 'Bodega Online', 'Bodega Bogota') 
+				WHEN JSON_VALUE(Order_jsonApi, '$.Warehouse.name') IN ('Bodega Ingram', 'Bodega Online', 'Bodega Bogota') 
 					THEN    
 						CASE
-							WHEN    DATEADD(DAY, -7, GETDATE()) <=   '2026-06-12 17:00:00'
-								THEN    '2026-06-12 17:00:00'
-							ELSE    DATEADD(DAY, -7, GETDATE())
+							WHEN DATEADD(DAY, -7, GETDATE()) <= '2026-06-12 17:00:00'
+								THEN '2026-06-12 17:00:00'
+							ELSE DATEADD(DAY, -7, GETDATE())
 						END
-				WHEN      JSON_VALUE(Order_jsonApi, '$.Warehouse.name')   IN   ('FULL', 'FULL FALABELLA', 'FULL ML BOGOTA', 'FULL ML TIENDA OFICIAL') 
-					THEN    DATEADD(DAY, -7, GETDATE())
+				WHEN JSON_VALUE(Order_jsonApi, '$.Warehouse.name') IN ('FULL', 'FULL FALABELLA', 'FULL ML BOGOTA', 'FULL ML TIENDA OFICIAL') 
+					THEN DATEADD(DAY, -7, GETDATE())
 				ELSE 
 					CASE
-						WHEN    DATEADD(DAY, -7, GETDATE()) <=   '2026-06-12 17:00:00'
-							THEN    '2026-06-12 17:00:00'
-						ELSE    DATEADD(DAY, -7, GETDATE())
+						WHEN DATEADD(DAY, -7, GETDATE()) <= '2026-06-12 17:00:00'
+							THEN '2026-06-12 17:00:00'
+						ELSE DATEADD(DAY, -7, GETDATE())
 					END
 			END 
 		);
 
 	--->	Recorremos los pedidos
-	SET @total	=	(SELECT COUNT(*) FROM @ordenes);
+	SET @total = (SELECT COUNT(*) FROM @ordenes);
+
 	WHILE @counter <= @total
 	BEGIN
 		BEGIN TRY
-			DECLARE @tipo_tercero	INT	=	NULL;
-			--Obtenemos el id de la orden y el tercero
+			SET @tipo_tercero = NULL;
+
+			-- Obtenemos el id de la orden y el tercero
 			SELECT
 				@order		=	IdOrder,
 				@tercero	=	
 					CASE
-						WHEN	tipoTercero	=	2 
+						WHEN tipoTercero = 2 
 							THEN
 								CASE
-									WHEN	LEN(documentoTer)	>	9
-										THEN	LEFT(documentoTer, 9)
+									WHEN LEN(documentoTer) > 9
+										THEN LEFT(documentoTer, 9)
 									ELSE documentoTer
 								END 
-						ELSE	documentoTer
+						ELSE documentoTer
 					END,
-				@tipo_tercero	=	tipoTercero
+				@tipo_tercero = tipoTercero
 			FROM @ordenes
-			WHERE
-				Orden	=	@counter;
+			WHERE Orden = @counter;
 			
-			-- PEDIDO
+			-- CABECERA PEDIDO
 			SELECT
 				CONVERT(VARCHAR, GETDATE(), 112)	                                                  AS	f430_id_fecha,
 				@tercero							                                                  AS	f430_id_tercero_fact,
@@ -254,7 +272,6 @@ BEGIN TRY
 									END
 								FROM (
 									SELECT 
-										-- limpiar: eliminar primer '2' + ceros consecutivos
 										SUBSTRING(
 											extNum,
 											1 + PATINDEX('%[1-9]%', SUBSTRING(extNum, 2, LEN(extNum))),
@@ -285,7 +302,6 @@ BEGIN TRY
 									END
 								FROM (
 									SELECT 
-										-- limpiar: eliminar primer '2' + ceros consecutivos
 										SUBSTRING(
 											extNum,
 											1 + PATINDEX('%[1-9]%', SUBSTRING(extNum, 2, LEN(extNum))),
@@ -311,16 +327,16 @@ BEGIN TRY
 					'   Bodega: ', JSON_VALUE(Order_jsonApi, '$.Warehouse.name')
 				)                                                                                      AS	f430_notas,
 				'' 									                                                   AS	f430_id_tercero_vendedor,
-				f419_contacto	=
-					CASE	@tipo_tercero
-						WHEN	1
+				f419_contacto =
+					CASE @tipo_tercero
+						WHEN 1
 							THEN
 								CASE 
-									WHEN	LEN(UPPER(JSON_VALUE(Order_jsonApi, '$.Client.fullName'))) > 50 
-										THEN	ISNULL(LEFT(UPPER(JSON_VALUE(Order_jsonApi, '$.Client.fullName')), 50),'')
-									ELSE 	ISNULL(UPPER(JSON_VALUE(Order_jsonApi, '$.Client.fullName')),'')
+									WHEN LEN(UPPER(JSON_VALUE(Order_jsonApi, '$.Client.fullName'))) > 50 
+										THEN ISNULL(LEFT(UPPER(JSON_VALUE(Order_jsonApi, '$.Client.fullName')), 50), '')
+									ELSE ISNULL(UPPER(JSON_VALUE(Order_jsonApi, '$.Client.fullName')), '')
 								END
-						ELSE	REPLACE(JSON_VALUE(Order_jsonApi, '$.Client.name'),'&','')
+						ELSE REPLACE(JSON_VALUE(Order_jsonApi, '$.Client.name'), '&', '')
 					END
 			INTO #company_Pedidos
 			FROM @ordenes
@@ -334,120 +350,67 @@ BEGIN TRY
 						JSON_VALUE(value, '$.ProductVersion.code') LIKE '%-%' 
 						AND 
 						UPPER(JSON_VALUE(value, '$.ProductVersion.Product.name')) LIKE '%HP%' 
-						THEN
-							REPLACE(JSON_VALUE(value, '$.ProductVersion.code'),'-','#')
+						THEN REPLACE(JSON_VALUE(value, '$.ProductVersion.code'), '-', '#')
 					WHEN
 						JSON_VALUE(value, '$.ProductVersion.code') LIKE '%-%' 
 						AND 
 						UPPER(JSON_VALUE(value, '$.ProductVersion.Product.name')) LIKE '%APPLE%'
-						THEN
-							REPLACE(JSON_VALUE(value, '$.ProductVersion.code'),'-','/')
-					ELSE	JSON_VALUE(value, '$.ProductVersion.code')
+						THEN REPLACE(JSON_VALUE(value, '$.ProductVersion.code'), '-', '/')
+					ELSE JSON_VALUE(value, '$.ProductVersion.code')
 				END                                                                                            AS f431_referencia_item,
 				CASE JSON_VALUE(Order_jsonApi, '$.Warehouse.name')
-			    	WHEN	'Bodega Ingram' 
-						THEN	'01' 
-					WHEN	'Bodega Online' 
-						THEN	'01'
-					WHEN	'FULL' 
-						THEN	'04' 
-					WHEN	'Bodega Bogota'
-						THEN	'02' 
-					WHEN	'FULL FALABELLA' 
-						THEN	'08' 
-					WHEN	'FULL ML BOGOTA' 
-						THEN	'11'
-					WHEN	'FULL ML TIENDA OFICIAL' 
-						THEN	'06'
-			    	ELSE	'01'
+			    	WHEN 'Bodega Ingram'          THEN '01' 
+					WHEN 'Bodega Online'          THEN '01'
+					WHEN 'FULL'                   THEN '04' 
+					WHEN 'Bodega Bogota'          THEN '02' 
+					WHEN 'FULL FALABELLA'         THEN '08' 
+					WHEN 'FULL ML BOGOTA'         THEN '11'
+					WHEN 'FULL ML TIENDA OFICIAL' THEN '06'
+			    	ELSE '01'
 				END                                                                                            AS f431_id_bodega,
 				CONVERT(VARCHAR(8), DATEADD(DAY, 1, GETDATE()), 112)                                           AS f431_fecha_entrega,
 				'1'                                                                                            AS f431_num_dias_entrega,
-				TRIM(ISNULL(f120_id_unidad_inventario, 'UND'))                                                 AS f431_id_unidad_medida,
+				TRIM(ISNULL(t120.f120_id_unidad_inventario, 'UND'))                                            AS f431_id_unidad_medida,
 				JSON_VALUE(value, '$.count')                                                                   AS f431_cant_pedida_base,
-				CAST(((JSON_VALUE(value, '$.gross')-CAST(
-					ISNULL(
-						TRY_CAST(JSON_VALUE(value, '$.CheckoutItemDiscounts[0].discount') AS DECIMAL(18,2)) 
-						/ NULLIF(CAST(JSON_VALUE(value, '$.count') AS INT), 0),
-						0
-					) AS DECIMAL(18,2)
-				))
-				/((ISNULL(impuesto.f037_tasa,0) / 100)+ 1)) AS DECIMAL(18,2))                                  AS f431_precio_unitario,
+				CAST((
+					(ISNULL(TRY_CAST(JSON_VALUE(value, '$.gross') AS DECIMAL(18,2)), 0) -
+					 CAST(
+						ISNULL(
+							TRY_CAST(JSON_VALUE(value, '$.CheckoutItemDiscounts[0].discount') AS DECIMAL(18,2)) 
+							/ NULLIF(CAST(JSON_VALUE(value, '$.count') AS INT), 0),
+							0
+						) AS DECIMAL(18,2)
+					 ))
+					/ ((ISNULL(impuesto.f037_tasa, 0) / 100.0) + 1.0)
+				) AS DECIMAL(18,2))                                                                            AS f431_precio_unitario,
 				''                                                                                             AS f431_notas
 			INTO #company_Movimientos
 			FROM @ordenes o
 				CROSS APPLY OPENJSON(Order_jsonApi, '$.CheckoutItems')  
-				LEFT JOIN OPENROWSET(
-					'SQLNCLI',
-					'server=siesa-m3-sqlsw-sbs01.cihpfbkcx35e.us-east-1.rds.amazonaws.com;Database=SUnoEE_TecnoPlaza_Real;uid=tecnoplaza;pwd=Tecnoplaza$12$%',
-					'SELECT * FROM t120_mc_items'
-				) AS t120
-					ON
-						f120_referencia	=
-							CASE
-								WHEN	
-									JSON_VALUE(value, '$.ProductVersion.code') LIKE '%-%' 
-									AND 
-									UPPER(
-										JSON_VALUE(value, '$.ProductVersion.Product.name')
-									) LIKE '%HP%' 
-									THEN REPLACE(JSON_VALUE(value, '$.ProductVersion.code'),'-','#')
-								WHEN 
-									JSON_VALUE(value, '$.ProductVersion.code') LIKE '%-%' 
-									AND 
-									UPPER(
-										JSON_VALUE(value, '$.ProductVersion.Product.name')
-									) LIKE '%APPLE%'
-									THEN 
-										REPLACE(JSON_VALUE(value, '$.ProductVersion.code'),'-','/')
-								ELSE	JSON_VALUE(value, '$.ProductVersion.code')
-							END
+				LEFT JOIN #ItemsUnidad AS t120
+					ON t120.f120_referencia =
+						CASE
+							WHEN JSON_VALUE(value, '$.ProductVersion.code') LIKE '%-%' 
+							 AND UPPER(JSON_VALUE(value, '$.ProductVersion.Product.name')) LIKE '%HP%' 
+								THEN REPLACE(JSON_VALUE(value, '$.ProductVersion.code'), '-', '#')
+							WHEN JSON_VALUE(value, '$.ProductVersion.code') LIKE '%-%' 
+							 AND UPPER(JSON_VALUE(value, '$.ProductVersion.Product.name')) LIKE '%APPLE%'
+								THEN REPLACE(JSON_VALUE(value, '$.ProductVersion.code'), '-', '/')
+							ELSE JSON_VALUE(value, '$.ProductVersion.code')
+						END
 				LEFT JOIN @ImpuestoGI AS impuesto 
-					ON 
-						impuesto.f120_id_cia = 1 
-						AND 
-						impuesto.f120_referencia = 
-							CASE 
-								WHEN 
-									JSON_VALUE(value, '$.ProductVersion.code') LIKE '%-%' 
-									AND 
-									UPPER(JSON_VALUE(value, '$.ProductVersion.Product.name')) LIKE '%HP%'
-									THEN 
-										REPLACE(JSON_VALUE(value, '$.ProductVersion.code'),'-','#')
-								WHEN 
-									JSON_VALUE(value, '$.ProductVersion.code') LIKE '%-%' 
-									AND 
-									UPPER(JSON_VALUE(value, '$.ProductVersion.Product.name')) LIKE '%APPLE%'
-									THEN
-										REPLACE(JSON_VALUE(value, '$.ProductVersion.code'),'-','/')
-								ELSE	JSON_VALUE(value, '$.ProductVersion.code')
-							END
+					ON impuesto.f120_id_cia = 1 
+				   AND impuesto.f120_referencia = 
+						CASE 
+							WHEN JSON_VALUE(value, '$.ProductVersion.code') LIKE '%-%' 
+							 AND UPPER(JSON_VALUE(value, '$.ProductVersion.Product.name')) LIKE '%HP%'
+								THEN REPLACE(JSON_VALUE(value, '$.ProductVersion.code'), '-', '#')
+							WHEN JSON_VALUE(value, '$.ProductVersion.code') LIKE '%-%' 
+							 AND UPPER(JSON_VALUE(value, '$.ProductVersion.Product.name')) LIKE '%APPLE%'
+								THEN REPLACE(JSON_VALUE(value, '$.ProductVersion.code'), '-', '/')
+							ELSE JSON_VALUE(value, '$.ProductVersion.code')
+						END
 			WHERE Orden = @counter;
-
-			/*
-			-- DESCUENTOS
-			SELECT 
-				ROW_NUMBER() OVER (ORDER BY JSON_VALUE(value, '$.ProductVersion._id')) AS f431_nro_registro,
-				CAST(
-					ISNULL(
-						TRY_CAST(JSON_VALUE(value, '$.CheckoutItemDiscounts[0].discount') AS DECIMAL(18,4)) 
-						/ NULLIF(CAST(JSON_VALUE(value, '$.count') AS INT), 0),
-						0
-					) AS DECIMAL(18,4)
-				) AS f432_vlr_uni
-			INTO #company_Descuentos
-			FROM @ordenes o
-				CROSS APPLY OPENJSON(Order_jsonApi, '$.CheckoutItems')  
-				LEFT JOIN OPENROWSET(
-					'SQLNCLI',
-					'server=siesa-m3-sqlsw-sbs01.cihpfbkcx35e.us-east-1.rds.amazonaws.com;Database=SUnoEE_TecnoPlaza_Real;uid=tecnoplaza;pwd=Tecnoplaza$12$%',
-					'SELECT * FROM t120_mc_items'
-				) AS t120
-					ON 
-						f120_referencia = JSON_VALUE(value, '$.ProductVersion.Product.code')
-			WHERE 
-				Orden = @counter;
-			*/
 
 			INSERT INTO @final (
 				idDocumento,
@@ -475,50 +438,39 @@ BEGIN TRY
 							FROM #company_Movimientos m
 							FOR JSON PATH
 						)
-						/*
-						,
-						[Descuentos] = JSON_QUERY(
-							CASE 
-								WHEN EXISTS (
-									SELECT 1 
-									FROM #company_Descuentos d
-									WHERE ISNULL(d.f432_vlr_uni, 0) <> 0
-								)
-								THEN (
-									SELECT 
-										d.*
-									FROM #company_Descuentos d
-									WHERE ISNULL(d.f432_vlr_uni, 0) <> 0
-									FOR JSON PATH
-								)
-							END
-						)
-						*/
 					FOR JSON PATH, 
 					WITHOUT_ARRAY_WRAPPER
 				) AS json;
 		END TRY
 		BEGIN CATCH
-		END CATCH
+			-- Registrar novedad en consola para monitoreo sin interrumpir el lote
+			PRINT CONCAT('Novedad procesando orden ', @order, ' (fila ', @counter, '): ', ERROR_MESSAGE());
+		END CATCH;
 			
-		IF	OBJECT_ID('tempdb..#company_Pedidos')		IS NOT NULL DROP TABLE #company_Pedidos;
-		IF	OBJECT_ID('tempdb..#company_Movimientos')	IS NOT NULL DROP TABLE #company_Movimientos;
-		IF	OBJECT_ID('tempdb..#company_Descuentos')	IS NOT NULL DROP TABLE #company_Descuentos;
+		IF OBJECT_ID('tempdb..#company_Pedidos')     IS NOT NULL DROP TABLE #company_Pedidos;
+		IF OBJECT_ID('tempdb..#company_Movimientos') IS NOT NULL DROP TABLE #company_Movimientos;
+		IF OBJECT_ID('tempdb..#company_Descuentos')  IS NOT NULL DROP TABLE #company_Descuentos;
 	
 		SET @counter = @counter + 1;
-	END
-	IF	OBJECT_ID('tempdb..##company_OrdenesCreadas')	IS NOT NULL DROP TABLE ##company_OrdenesCreadas;
+	END;
+
+	IF OBJECT_ID('tempdb..#company_OrdenesCreadas') IS NOT NULL DROP TABLE #company_OrdenesCreadas;
+	IF OBJECT_ID('tempdb..#ItemsUnidad')            IS NOT NULL DROP TABLE #ItemsUnidad;
 END TRY
 BEGIN CATCH
-	SELECT CAST(1 AS BIT) AS indicaError, CONCAT('Error: ', ERROR_MESSAGE()) AS descripcionError
+	SELECT 
+		CAST(1 AS BIT) AS indicaError, 
+		CONCAT('Error general en Pedidos: ', ERROR_MESSAGE()) AS descripcionError;
 	GOTO Cleanup;
-END CATCH
+END CATCH;
+
 CLEANUP:
 	BEGIN
-		IF	OBJECT_ID('tempdb..##company_OrdenesCreadas')	IS NOT NULL DROP TABLE ##company_OrdenesCreadas;
-		IF	OBJECT_ID('tempdb..#company_Pedidos')			IS NOT NULL DROP TABLE #company_Pedidos;
-		IF	OBJECT_ID('tempdb..#company_Movimientos')		IS NOT NULL DROP TABLE #company_Movimientos;
-		IF	OBJECT_ID('tempdb..#company_Descuentos')		IS NOT NULL DROP TABLE #company_Descuentos;
-	END
+		IF OBJECT_ID('tempdb..#company_OrdenesCreadas') IS NOT NULL DROP TABLE #company_OrdenesCreadas;
+		IF OBJECT_ID('tempdb..#company_Pedidos')        IS NOT NULL DROP TABLE #company_Pedidos;
+		IF OBJECT_ID('tempdb..#company_Movimientos')    IS NOT NULL DROP TABLE #company_Movimientos;
+		IF OBJECT_ID('tempdb..#company_Descuentos')     IS NOT NULL DROP TABLE #company_Descuentos;
+		IF OBJECT_ID('tempdb..#ItemsUnidad')            IS NOT NULL DROP TABLE #ItemsUnidad;
+	END;
 
 SELECT * FROM @final AS final_json;

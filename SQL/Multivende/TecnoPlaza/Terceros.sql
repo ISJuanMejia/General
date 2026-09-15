@@ -1,3 +1,5 @@
+SET XACT_ABORT ON;
+
 BEGIN TRY
 	--->	AJUSTAR CON LOS PARAMETROS DE TU CONECTOR.
 	DECLARE @id_documento			INT			    =	222302,
@@ -95,7 +97,7 @@ BEGIN TRY
 		Orden				INT,
 		documentoTer		NVARCHAR(100),
 		tipoDocTer			NVARCHAR(100),
-		tipoTercero			NVARCHAR(100),
+		tipoTercero			INT,
 		nombreCompletoTer	NVARCHAR(200),
 		nombreTer			NVARCHAR(200),
 		apellidoTer			NVARCHAR(100),
@@ -113,7 +115,7 @@ BEGIN TRY
 	SELECT	TOP 25
 		[IdOrder]			=	IdOrder,
 		[Order_jsonApi]		=	Order_jsonApi,
-		[Orden]				=	ROW_NUMBER() OVER (ORDER BY (SELECT IdOrder)),
+		[Orden]				=	ROW_NUMBER() OVER (ORDER BY IdOrder),
 		--Datos Tercero
 		[documentoTer]		=	dbo.OnlyNumbers(JSON_VALUE(Order_jsonApi, '$.Client.taxId')),
 		[tipoDocTer]		=	JSON_VALUE(Order_jsonApi, '$.Client.type'),
@@ -216,22 +218,31 @@ BEGIN TRY
 			@dpto_siesa		NVARCHAR(3),
 			@ciudad_siesa	NVARCHAR(3);
 
-	DECLARE @json			NVARCHAR(MAX) = '';
 	DECLARE @counter		INT = 1;
 	DECLARE @total			INT;
 	DECLARE @order			VARCHAR(50);
-	DECLARE @conexion		NVARCHAR(MAX)	=	(SELECT TOP 1 cadena_conexion FROM Conexiones)
-	DECLARE @base_datos		NVARCHAR(MAX)	=	(SELECT TOP 1 base_datos FROM Conexiones);
 
 	SET @total = (SELECT COUNT(*) FROM @ordenes);
 	WHILE @counter <= @total
 	BEGIN
 		BEGIN TRY
-			DECLARE @id_tercero		NVARCHAR(100)	=	NULL;
-			--Obtenemos el id de la orden y el tercero
+			-- REINICIO OBLIGATORIO DE VARIABLES PARA EVITAR HERENCIA ENTRE ORDENES
+			SET @pais_siesa   = NULL;
+			SET @dpto_siesa   = NULL;
+			SET @ciudad_siesa = NULL;
+
+			DECLARE @id_tercero			NVARCHAR(100)	=	NULL;
+			DECLARE @ciudadBuscada		NVARCHAR(200)	=	NULL;
+			DECLARE @deptoBuscado		NVARCHAR(200)	=	NULL;
+			DECLARE @apeClean			NVARCHAR(200)	=	NULL;
+			DECLARE @posEspacio			INT				=	0;
+			DECLARE @ape1				NVARCHAR(100)	=	'';
+			DECLARE @ape2				NVARCHAR(100)	=	'';
+
+			-- Obtenemos el id de la orden y el tercero
 			SELECT
-				@order		=	IdOrder, 
-	       		@id_tercero	=
+				@order			=	IdOrder, 
+	       		@id_tercero		=
 					CASE
 						WHEN	tipoTercero	=	2 
 							THEN
@@ -241,89 +252,56 @@ BEGIN TRY
 									ELSE documentoTer
 								END 
 						ELSE	documentoTer
-					END
+					END,
+				@ciudadBuscada	=	UPPER(TRIM(ISNULL(paisTer, ''))),
+				@deptoBuscado	=	UPPER(TRIM(ISNULL(stateTer, ''))),
+				@apeClean		=	LTRIM(RTRIM(ISNULL(apellidoTer, '')))
 			FROM @ordenes
 			WHERE
 				Orden	=	@counter;
 
-			--->	Obtenemos Pais-Departamento-Ciudad
-			DECLARE @total_registro_pais	INT;
-
-			--->	Contamos cuántos registros coinciden por país
-			SELECT
-				@total_registro_pais	=	COUNT(*)
-			FROM locaciones_erp
-			WHERE
-				f013_descripcion	=
-					(
-						SELECT TOP 1
-							UPPER(paisTer)
-						FROM @ordenes
-						WHERE
-							Orden	=	@counter
-					);
-
-			--->	Si hay más de un registro, se agrega el filtro adicional por departamento (stateTer)
-			IF @total_registro_pais >= 2
+			-- División segura de apellidos sin riesgo de longitud negativa
+			SET @posEspacio = CHARINDEX(' ', @apeClean);
+			IF @posEspacio > 0
 			BEGIN
-				SELECT 
-					@pais_siesa   = f013_id_pais,
-					@dpto_siesa   = f013_id_depto,
-					@ciudad_siesa = f013_id
-				FROM locaciones_erp
-				WHERE
-					f013_descripcion	=	(
-						SELECT TOP 1 
-							UPPER(paisTer)
-						FROM @ordenes
-						WHERE
-							Orden	=	@counter
-					)
-					AND 
-					f012_descripcion	=	(
-						SELECT TOP 1 
-							UPPER(stateTer)
-						FROM @ordenes
-						WHERE
-							Orden	=	@counter
-					);
-			END
-			ELSE IF	@total_registro_pais	=	0
-			BEGIN
-				SELECT 
-					@pais_siesa   = f013_id_pais,
-					@dpto_siesa   = f013_id_depto,
-					@ciudad_siesa = f013_id
-				FROM locaciones_erp
-				WHERE
-					REPLACE(
-						f013_descripcion,
-						'Bogotá, D.C.',
-						'Bogotá D.C.'
-					)	=	(
-						SELECT TOP 1 
-							UPPER(stateTer)
-						FROM @ordenes
-						WHERE
-							Orden	=	@counter
-					);
+				SET @ape1 = SUBSTRING(@apeClean, 1, @posEspacio - 1);
+				SET @ape2 = LTRIM(SUBSTRING(@apeClean, @posEspacio + 1, LEN(@apeClean)));
 			END
 			ELSE
 			BEGIN
-				SELECT 
+				SET @ape1 = @apeClean;
+				SET @ape2 = '';
+			END;
+
+			--->	Homologación Pais-Departamento-Ciudad con Collation Insensible a Tildes (CI_AI)
+			-- 1. Coincidencia exacta de ciudad (y departamento si se suministra)
+			SELECT TOP 1
+				@pais_siesa   = f013_id_pais,
+				@dpto_siesa   = f013_id_depto,
+				@ciudad_siesa = f013_id
+			FROM dbo.locaciones_erp
+			WHERE
+				f013_descripcion COLLATE Latin1_General_CI_AI = @ciudadBuscada
+				AND (@deptoBuscado = '' OR f012_descripcion COLLATE Latin1_General_CI_AI = @deptoBuscado);
+
+			-- 2. Coincidencia tolerante (ej: 'Bogotá, D.C.' vs 'BOGOTA', o departamento en ciudad)
+			IF @ciudad_siesa IS NULL
+			BEGIN
+				SELECT TOP 1
 					@pais_siesa   = f013_id_pais,
 					@dpto_siesa   = f013_id_depto,
 					@ciudad_siesa = f013_id
-				FROM locaciones_erp
+				FROM dbo.locaciones_erp
 				WHERE
-					f013_descripcion	=	(
-						SELECT TOP 1 
-							UPPER(paisTer)
-						FROM @ordenes
-						WHERE
-							Orden	=	@counter
-					);
-			END
+					REPLACE(REPLACE(f013_descripcion, ', D.C.', ''), ' D.C.', '') COLLATE Latin1_General_CI_AI = @ciudadBuscada
+					OR
+					f013_descripcion COLLATE Latin1_General_CI_AI = @ciudadBuscada
+					OR
+					(@deptoBuscado <> '' AND (
+						f012_descripcion COLLATE Latin1_General_CI_AI = @ciudadBuscada
+						OR REPLACE(REPLACE(f013_descripcion, ', D.C.', ''), ' D.C.', '') COLLATE Latin1_General_CI_AI = @deptoBuscado
+					));
+			END;
 
 			--->	TERCEROS
 			INSERT INTO @terceros
@@ -352,188 +330,48 @@ BEGIN TRY
 				[F200_NIT]				=	@id_tercero,
 				[F200_ID_TIPO_IDENT]	=	
 					CASE
-						WHEN	tipoTercero	=	'1'
+						WHEN	tipoTercero	=	1
 							THEN	'C'
 						ELSE	'N'
 					END,
 				[F200_IND_TIPO_TERCERO]	=
 					CASE
-						WHEN	tipoTercero	=	'1'
+						WHEN	tipoTercero	=	1
 							THEN	'1'
 						ELSE	'2'
 					END,
 				[F200_RAZON_SOCIAL]		=
 					CASE
-						WHEN	tipoTercero	=	'1'
+						WHEN	tipoTercero	=	1
 							THEN	''
 						ELSE	TRIM(LEFT(UPPER(nombreTer), 100))
 					END,
 				[F200_APELLIDO1]		=
 					CASE
-						WHEN	tipoTercero	=	'1'
-							THEN
-								CASE
-									WHEN
-										LEN(
-											ISNULL(
-												LEFT(
-													UPPER(apellidoTer), 
-													CHARINDEX(
-														' ', 
-														UPPER(apellidoTer) + ' '
-													) - 1
-												),
-												''
-											)
-										)	>	29 
-										THEN
-											ISNULL(
-												LEFT(
-													ISNULL(
-														LEFT(
-															UPPER(apellidoTer), 
-															CHARINDEX(
-																' ', 
-																UPPER(apellidoTer) + ' '
-															) - 1
-														),
-														''
-													), 
-													29
-												),
-												''
-											)
-									ELSE
-										ISNULL(
-											ISNULL(
-												LEFT(
-													UPPER(apellidoTer), 
-													CHARINDEX(
-														' ', 
-														UPPER(apellidoTer) + ' '
-													) - 1
-												),
-												''
-											),
-											''
-										)
-								END
+						WHEN	tipoTercero	=	1
+							THEN	LEFT(UPPER(@ape1), 29)
 						ELSE	''
 					END,
 				[F200_APELLIDO2]		=
 					CASE
-						WHEN	tipoTercero	=	'1' 
-							THEN
-								CASE
-									WHEN
-										LEN(
-											ISNULL(
-												LTRIM(
-													SUBSTRING(
-														UPPER(apellidoTer), 
-														CHARINDEX(
-															' ', 
-															UPPER(apellidoTer) + ' '
-														) + 1, 
-														LEN(
-															UPPER(apellidoTer)
-														)
-													)
-												),
-												''
-											)
-										)	>	29
-										THEN
-											ISNULL(
-												LEFT(
-													ISNULL(
-														LTRIM(
-															SUBSTRING(
-																UPPER(apellidoTer), 
-																CHARINDEX(
-																	' ', 
-																	UPPER(apellidoTer) + ' '
-																) + 1, 
-																LEN(
-																	UPPER(apellidoTer)
-																)
-															)
-														),
-														''
-													), 
-													29
-												),
-												''
-											)
-									ELSE
-										ISNULL(
-											ISNULL(
-												LTRIM(
-													SUBSTRING(
-														UPPER(apellidoTer), 
-														CHARINDEX(
-															' ', 
-															UPPER(apellidoTer) + ' '
-														) + 1, 
-														LEN(
-															UPPER(apellidoTer)
-														)
-													)
-												),
-												''
-											),
-											''
-										)
-								END
+						WHEN	tipoTercero	=	1
+							THEN	LEFT(UPPER(@ape2), 29)
 						ELSE	''
 					END,
 				[F200_NOMBRES]			=
 					CASE
-						WHEN	tipoTercero	=	'1'
-							THEN
-								CASE 
-									WHEN	LEN(UPPER(nombreTer))	> 40
-										THEN
-											ISNULL(
-												LEFT(
-													UPPER(nombreTer), 
-													40
-												),
-												''
-											)
-									ELSE
-										ISNULL(UPPER(nombreTer),'')
-								END
+						WHEN	tipoTercero	=	1
+							THEN	LEFT(UPPER(nombreTer), 40)
 						ELSE	''
 					END,
 				[F015_CONTACTO]			=
 					CASE
-						WHEN	tipoTercero	=	'1'
-							THEN
-								CASE
-									WHEN	LEN(UPPER(nombreCompletoTer))	>	50
-										THEN	ISNULL(LEFT(UPPER(nombreCompletoTer), 50),'')
-									ELSE	ISNULL(UPPER(nombreCompletoTer),'')
-								END
-						ELSE
-							CASE
-								WHEN	LEN(UPPER(nombreTer)) > 50
-									THEN	ISNULL(LEFT(UPPER(nombreTer), 50),'')
-								ELSE	ISNULL(UPPER(nombreTer),'')
-							END
+						WHEN	tipoTercero	=	1
+							THEN	LEFT(UPPER(nombreCompletoTer), 50)
+						ELSE	LEFT(UPPER(nombreTer), 50)
 					END,
-				[F015_DIRECCION1]		=
-					CASE
-						WHEN	LEN(UPPER(direccionUno)) > 40
-							THEN	ISNULL(LEFT(UPPER(direccionUno), 40),'')
-						ELSE	ISNULL(UPPER(direccionUno),'')
-					END,
-				[F015_DIRECCION2]		=
-					CASE
-						WHEN	LEN(UPPER(direccionDos)) > 40
-							THEN	ISNULL(LEFT(UPPER(direccionDos), 40),'')
-						ELSE	ISNULL(UPPER(direccionDos),'')
-					END,
+				[F015_DIRECCION1]		=	LEFT(ISNULL(UPPER(direccionUno), ''), 40),
+				[F015_DIRECCION2]		=	LEFT(ISNULL(UPPER(direccionDos), ''), 40),
 				[F015_ID_PAIS]			=	ISNULL(@pais_siesa, '169'),
 				[F015_ID_DEPTO]			=	ISNULL(@dpto_siesa, '76'),
 				[F015_ID_CIUDAD]		=   ISNULL(@ciudad_siesa, '999'),
@@ -600,19 +438,9 @@ BEGIN TRY
 			SELECT 
 				[F201_ID_TERCERO]	=	@id_tercero,
 				CASE 
-					WHEN	tipoTercero	=	'1' 
-						THEN 
-							CASE 
-								WHEN	LEN(UPPER(nombreCompletoTer)) > 40 
-									THEN	ISNULL(LEFT(UPPER(nombreCompletoTer), 40),'')
-								ELSE	ISNULL(UPPER(nombreCompletoTer),'')
-							END                                                                            
-					ELSE 
-						CASE 
-							WHEN LEN(UPPER(nombreTer)) > 40 
-								THEN ISNULL(LEFT(UPPER(nombreTer), 40),'')
-							ELSE ISNULL(UPPER(nombreTer),'')
-						END 
+					WHEN	tipoTercero	=	1 
+						THEN	LEFT(ISNULL(UPPER(nombreCompletoTer), ''), 40)
+					ELSE	LEFT(ISNULL(UPPER(nombreTer), ''), 40)
 				END	AS	F201_DESCRIPCION_SUCURSAL,
 				CASE	origen
 					WHEN	'shopify'
@@ -623,34 +451,16 @@ BEGIN TRY
 						THEN	'0100'
 				END																              AS	F201_ID_VENDEDOR,
 				CASE
-					WHEN	tipoTercero	=	'1' 
-						THEN
-							CASE
-								WHEN	LEN(UPPER(nombreCompletoTer)) > 50 
-									THEN	ISNULL(LEFT(UPPER(nombreCompletoTer), 50),'')
-								ELSE	ISNULL(UPPER(nombreCompletoTer),'')
-						END                                                                            
-						ELSE 
-							CASE 
-								WHEN LEN(UPPER(nombreTer)) > 50 
-									THEN ISNULL(LEFT(UPPER(nombreTer), 50),'')
-								ELSE ISNULL(UPPER(nombreTer),'')
-							END 
+					WHEN	tipoTercero	=	1 
+						THEN	LEFT(ISNULL(UPPER(nombreCompletoTer), ''), 50)
+					ELSE	LEFT(ISNULL(UPPER(nombreTer), ''), 50)
 				END                                                                           AS    F015_CONTACTO,
-				CASE 
-					WHEN LEN(UPPER(direccionUno)) > 40 
-						THEN ISNULL(LEFT(UPPER(direccionUno), 40),'')
-					ELSE ISNULL(UPPER(direccionUno),'')
-				END	                                                                          AS	F015_DIRECCION1,
-				CASE 
-					WHEN LEN(UPPER(direccionDos)) > 40 
-						THEN ISNULL(LEFT(UPPER(direccionDos), 40),'')
-					ELSE ISNULL(UPPER(direccionDos),'')
-				END 	                                                                      AS	F015_DIRECCION2,
+				LEFT(ISNULL(UPPER(direccionUno), ''), 40)	                                  AS	F015_DIRECCION1,
+				LEFT(ISNULL(UPPER(direccionDos), ''), 40) 	                                  AS	F015_DIRECCION2,
 				ISNULL(@pais_siesa, '169')		                                              AS	F015_ID_PAIS,
 				ISNULL(@dpto_siesa, '76')			                                          AS	F015_ID_DEPTO,
-				ISNULL(@ciudad_siesa, '999')		                                              AS	F015_ID_CIUDAD,
-				ISNULL(REPLACE(REPLACE(REPLACE(REPLACE(UPPER(celularTer), '#', ''), 'X', ''), '+57', ''), ' ', ''), '')       	  AS	F015_TELEFONO,
+				ISNULL(@ciudad_siesa, '999')		                                          AS	F015_ID_CIUDAD,
+				ISNULL(REPLACE(REPLACE(REPLACE(REPLACE(UPPER(celularTer), '#', ''), 'X', ''), '+57', ''), ' ', ''), '') AS F015_TELEFONO,
 				CASE 
 					WHEN origen = 'mercadolibre' THEN 
 						CASE 
@@ -660,7 +470,7 @@ BEGIN TRY
 					ELSE ISNULL(emailTer, '')						
 				END														                      AS	F015_EMAIL,
 				CONVERT(VARCHAR, GETDATE(), 112)								              AS	F201_FECHA_INGRESO,
-				ISNULL(REPLACE(REPLACE(REPLACE(REPLACE(UPPER(celularTer), '#', ''), 'X', ''), '+57', ''), ' ', ''), '')		      AS	f015_celular
+				ISNULL(REPLACE(REPLACE(REPLACE(REPLACE(UPPER(celularTer), '#', ''), 'X', ''), '+57', ''), ' ', ''), '') AS f015_celular
 			FROM @ordenes
 			WHERE 
 				Orden	=	@counter;
@@ -713,7 +523,7 @@ BEGIN TRY
 				'EUNOECO017'                                                                     AS    f753_id_entidad,
 				'co017_codigo_regimen'                                                           AS    f753_id_atributo,
 				'MUNOECO016'														              AS	f753_id_maestro,
-				CASE WHEN tipoTercero = '1' THEN '49' ELSE '48' END						  AS	f753_id_maestro_detalle
+				CASE WHEN tipoTercero = 1 THEN '49' ELSE '48' END							      AS	f753_id_maestro_detalle
 			FROM @ordenes
 			WHERE Orden = @counter
 			UNION ALL
@@ -722,7 +532,7 @@ BEGIN TRY
 				'EUNOECO031'                                                                     AS    f753_id_entidad,
 				'co031_detalle_tributario1'                                                      AS    f753_id_atributo,
 				'MUNOECO035'														              AS	f753_id_maestro,
-				CASE WHEN tipoTercero = '1' THEN 'ZZ' ELSE '01' END						  AS	f753_id_maestro_detalle
+				CASE WHEN tipoTercero = 1 THEN 'ZZ' ELSE '01' END							      AS	f753_id_maestro_detalle
 			FROM @ordenes
 			WHERE Orden = @counter;
 
@@ -738,7 +548,7 @@ BEGIN TRY
 				'EUNOECO017'                                                                     AS    f753_id_entidad,
 				'co017_codigo_regimen'                                                           AS    f753_id_atributo,
 				'MUNOECO016'														              AS	f753_id_maestro,
-				CASE WHEN tipoTercero = '1' THEN '49' ELSE '48' END						  AS	f753_id_maestro_detalle
+				CASE WHEN tipoTercero = 1 THEN '49' ELSE '48' END							      AS	f753_id_maestro_detalle
 			FROM @ordenes
 			WHERE 
 				Orden	=	@counter
@@ -748,7 +558,7 @@ BEGIN TRY
 				'EUNOECO031'                                                                     AS    f753_id_entidad,
 				'co031_detalle_tributario1'                                                      AS    f753_id_atributo,
 				'MUNOECO035'														              AS	f753_id_maestro,
-				CASE WHEN tipoTercero = '1' THEN 'ZZ' ELSE '01' END						  AS	f753_id_maestro_detalle
+				CASE WHEN tipoTercero = 1 THEN 'ZZ' ELSE '01' END							      AS	f753_id_maestro_detalle
 			FROM @ordenes
 			WHERE Orden = @counter;
 
@@ -807,10 +617,12 @@ BEGIN TRY
 					FOR JSON PATH,
 					WITHOUT_ARRAY_WRAPPER,
 					INCLUDE_NULL_VALUES
-				)
+				);
 		END TRY
 		BEGIN CATCH
-		END CATCH
+			PRINT CONCAT('Novedad procesando tercero para orden ', @order, ': ', ERROR_MESSAGE());
+		END CATCH;
+
 		DELETE @terceros;
 		DELETE @cliente;
 		DELETE @impuestos;
@@ -818,10 +630,12 @@ BEGIN TRY
 		DELETE @entidadTercero;
 		DELETE @entidadCliente;
 		SET @counter = @counter + 1;
-	END
+	END;
 
-	SELECT * from @final AS final_json;
+	SELECT * FROM @final AS final_json;
 END TRY
 BEGIN CATCH
-END CATCH
- 
+	SELECT 
+		CAST(1 AS BIT) AS indicaError, 
+		CONCAT('Error general en Terceros: ', ERROR_MESSAGE()) AS descripcionError;
+END CATCH;
