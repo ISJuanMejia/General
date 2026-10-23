@@ -1,4 +1,4 @@
-﻿DECLARE @endpoint NVARCHAR(500) = 'https://servicios.siesacloud.com/api/siesa/v3.1/conectoresimportar?idCompania=6618&idSistema=2&idDocumento=217657&nombreDocumento=Ecommerce_Pedido';
+DECLARE @endpoint NVARCHAR(500) = 'https://servicios.siesacloud.com/api/siesa/v3.1/conectoresimportar?idCompania=6618&idSistema=2&idDocumento=217657&nombreDocumento=Ecommerce_Pedido';
 
 IF OBJECT_ID('tempdb..#ordenes') IS NOT NULL
     DROP TABLE #ordenes;
@@ -20,7 +20,8 @@ FROM OPENROWSET(
 		f430_num_docto_referencia   =   TRIM(f430_num_docto_referencia)
 	FROM t430_cm_pv_docto
     WHERE
-        f430_id_co = ''010''
+        f430_id_cia = 1
+        AND f430_id_co = ''010''
         AND 
         f430_id_tipo_docto IN (''PED'', ''TMS'')
         AND

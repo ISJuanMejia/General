@@ -14,13 +14,13 @@ FROM OPENROWSET(
     'Server=siesa-m4-sqlsw-db6.ceqnrhbwqaoo.us-east-1.rds.amazonaws.com;Database=UnoEE_Pisende_Real;Uid=Pisende;Pwd=Pisende$12$%;',
     '
     -- 1. Recaudos de anticipo (RCA) por f357_referencia (orderId)
-    SELECT DISTINCT TRIM(r.f357_referencia) AS referencia
-    FROM t357_co_recaudos r
-    INNER JOIN t350_co_docto_contable c ON c.f350_rowid = r.f357_rowid_docto
+    SELECT DISTINCT TRIM(i.f357_referencia) AS referencia
+    FROM t357_co_ingresos_caja i
+    INNER JOIN t350_co_docto_contable c ON c.f350_rowid = i.f357_rowid_docto
     WHERE c.f350_id_cia = 1 
       AND c.f350_id_co = ''010''
       AND c.f350_id_tipo_docto = ''RCA''
-      AND r.f357_referencia IS NOT NULL
+      AND i.f357_referencia IS NOT NULL
     UNION
     -- 2. Documentos de servicios/creditos por f350_notas (orderId)
     SELECT DISTINCT TRIM(REPLACE(f350_notas, ''Pedido: '', '''')) AS referencia
