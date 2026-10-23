@@ -1,13 +1,62 @@
-﻿DECLARE @endpointAnticipo NVARCHAR(500) = 'https://servicios.siesacloud.com/api/siesa/v3.1/conectoresimportar?idCompania=6618&idSistema=2&idDocumento=215337&nombreDocumento=Ecommerce_Recibo_Caja_Anticipo';
+DECLARE @endpointAnticipo NVARCHAR(500) = 'https://servicios.siesacloud.com/api/siesa/v3.1/conectoresimportar?idCompania=6618&idSistema=2&idDocumento=215337&nombreDocumento=Ecommerce_Recibo_Caja_Anticipo';
 DECLARE @endpointServicio NVARCHAR(500) = 'https://servicios.siesacloud.com/api/siesa/v3.1/conectoresimportar?idCompania=6618&idSistema=2&idDocumento=215939&nombreDocumento=Ecommerce_Venta_Servicios';
+
+IF OBJECT_ID('tempdb..#AnticiposERP') IS NOT NULL DROP TABLE #AnticiposERP;
+
+CREATE TABLE #AnticiposERP (
+    referencia NVARCHAR(100)
+);
+
+INSERT INTO #AnticiposERP
+SELECT DISTINCT referencia
+FROM OPENROWSET(
+    'SQLNCLI',
+    'Server=siesa-m4-sqlsw-db6.ceqnrhbwqaoo.us-east-1.rds.amazonaws.com;Database=UnoEE_Pisende_Real;Uid=Pisende;Pwd=Pisende$12$%;',
+    '
+    -- 1. Recaudos de anticipo (RCA) por f357_referencia (orderId)
+    SELECT DISTINCT TRIM(r.f357_referencia) AS referencia
+    FROM t357_co_recaudos r
+    INNER JOIN t350_co_docto_contable c ON c.f350_rowid = r.f357_rowid_docto
+    WHERE c.f350_id_cia = 1 
+      AND c.f350_id_co = ''010''
+      AND c.f350_id_tipo_docto = ''RCA''
+      AND r.f357_referencia IS NOT NULL
+    UNION
+    -- 2. Documentos de servicios/creditos por f350_notas (orderId)
+    SELECT DISTINCT TRIM(REPLACE(f350_notas, ''Pedido: '', '''')) AS referencia
+    FROM t350_co_docto_contable
+    WHERE f350_id_cia = 1 
+      AND f350_id_co = ''010''
+      AND f350_notas LIKE ''Pedido: %''
+    '
+) AS t;
+
+-- Si el anticipo ya fue creado en Siesa, avanzar directamente a Estado 4 (Pedido Por Integrar)
+UPDATE o
+SET 
+    id_estado           = 4,
+    intentos            = 0,
+    endpoint            = NULL,
+    orden_obj_destino   = NULL
+FROM ordenes o
+INNER JOIN #AnticiposERP a 
+    ON a.referencia = JSON_VALUE(o.orden_obj_origen, '$.orderId')
+WHERE o.id_tienda = 1 
+  AND o.id_estado = 3;
 
 IF OBJECT_ID('tempdb..#tempOrdenes') IS NOT NULL DROP TABLE #tempOrdenes;
 
-SELECT * 
+SELECT o.* 
 INTO #tempOrdenes
-FROM ordenes 
-WHERE id_estado = 3
-  AND ISNULL(intentos, 0) <= 3 ;
+FROM ordenes o
+LEFT JOIN #AnticiposERP a 
+    ON a.referencia = JSON_VALUE(o.orden_obj_origen, '$.orderId')
+WHERE o.id_tienda = 1
+  AND o.id_estado = 3
+  AND ISNULL(o.intentos, 0) < 3
+  AND a.referencia IS NULL;
+
+IF OBJECT_ID('tempdb..#AnticiposERP') IS NOT NULL DROP TABLE #AnticiposERP;
 
 -- vendedores ERP
 	IF OBJECT_ID('tempdb..#VendedoresERP') IS NOT NULL 
@@ -31,7 +80,7 @@ WHERE id_estado = 3
         '
     );
 
--- ActualizaciÃ³n final con lÃ³gica para ambos tipos de documentos
+-- Actualización final con lógica para ambos tipos de documentos
 UPDATE o
 SET 
     o.endpoint = CASE 
@@ -39,7 +88,6 @@ SET
              THEN @endpointServicio
         ELSE @endpointAnticipo
     END,
-    o.intentos = 0,
     o.fecha_creacion = GETDATE(),
     o.orden_obj_destino = 
     CASE 

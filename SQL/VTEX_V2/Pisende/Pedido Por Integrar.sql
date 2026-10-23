@@ -2,15 +2,72 @@
 
 IF OBJECT_ID('tempdb..#ordenes') IS NOT NULL
     DROP TABLE #ordenes;
-	
-select *
-into #ordenes
-from ordenes
-where id_tienda = 1 
-AND id_estado = 4
---AND ISNULL(endpoint, '') != @endpoint
-AND ISNULL(intentos,0) < 3
+IF OBJECT_ID('tempdb..#PedidosERP') IS NOT NULL
+    DROP TABLE #PedidosERP;
 
+CREATE TABLE #PedidosERP(
+	f430_num_docto_referencia NVARCHAR(50)
+)
+
+INSERT INTO #PedidosERP
+SELECT
+	f430_num_docto_referencia
+FROM OPENROWSET(
+    'SQLNCLI',
+    'Server=siesa-m4-sqlsw-db6.ceqnrhbwqaoo.us-east-1.rds.amazonaws.com;Database=UnoEE_Pisende_Real;Uid=Pisende;Pwd=Pisende$12$%;',
+    '
+    SELECT  DISTINCT
+		f430_num_docto_referencia   =   TRIM(f430_num_docto_referencia)
+	FROM t430_cm_pv_docto
+    WHERE
+        f430_id_co = ''010''
+        AND 
+        f430_id_tipo_docto IN (''PED'', ''TMS'')
+        AND
+        f430_referencia =   ''ECOMMERCE''
+    '
+) AS t430;
+
+UPDATE o
+SET 
+    id_estado           =   5,
+    intentos            =   0,
+    endpoint            =   NULL,
+    orden_obj_destino   =   NULL
+FROM ordenes o
+    INNER JOIN #PedidosERP 
+        ON CASE 
+            WHEN 
+                LEN(REPLACE(JSON_VALUE(o.orden_obj_origen, '$.orderId'), '-', '')) <= 15 
+                    THEN REPLACE(JSON_VALUE(o.orden_obj_origen, '$.orderId'), '-01', '01') 
+            ELSE JSON_VALUE(o.orden_obj_origen, '$.sequence') 
+        END =   #PedidosERP.f430_num_docto_referencia
+WHERE
+    id_tienda = 1 
+    AND 
+    id_estado = 4
+
+SELECT o.*
+INTO #ordenes
+FROM    ordenes o
+    LEFT JOIN #PedidosERP 
+        ON 
+            CASE 
+                WHEN LEN(REPLACE(JSON_VALUE(o.orden_obj_origen, '$.orderId'), '-', '')) <= 15 
+                    THEN REPLACE(JSON_VALUE(o.orden_obj_origen, '$.orderId'), '-01', '01') 
+                ELSE JSON_VALUE(o.orden_obj_origen, '$.sequence') 
+            END = #PedidosERP.f430_num_docto_referencia
+WHERE 
+    id_tienda   =   1 
+    AND 
+    id_estado   =   4
+    AND 
+    ISNULL(intentos,0) < 3
+    AND
+    f430_num_docto_referencia   IS NULL
+
+IF OBJECT_ID('tempdb..#PedidosERP') IS NOT NULL
+    DROP TABLE #PedidosERP;
 
 -- tabla temporal con columna 'tiene_flete' evaluada por cada orden
 IF OBJECT_ID('tempdb..#ordenes_con_flete') IS NOT NULL DROP TABLE #ordenes_con_flete;
@@ -397,7 +454,6 @@ INSERT INTO #TempOrdenes (id_tienda, id_orden, endpoint, fecha_creacion, orden_o
 	UPDATE o
 	SET 
 		o.endpoint = t.endpoint,
-		o.intentos = 0,
 		o.fecha_creacion = t.fecha_creacion,
 		o.orden_obj_destino = t.orden_obj_destino
 	FROM ordenes o

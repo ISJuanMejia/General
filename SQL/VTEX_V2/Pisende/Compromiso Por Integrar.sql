@@ -1,14 +1,73 @@
-﻿DECLARE @endpoint NVARCHAR(500) = 'https://servicios.siesacloud.com/api/siesa/v3.1/conectoresimportar?idCompania=6618&idSistema=2&idDocumento=217328&nombreDocumento=Ecommerce_Compromiso';
+DECLARE @endpoint NVARCHAR(500) = 'https://servicios.siesacloud.com/api/siesa/v3.1/conectoresimportar?idCompania=6618&idSistema=2&idDocumento=217328&nombreDocumento=Ecommerce_Compromiso';
 
--- Filtrar ordenes vÃ¡lidas
+IF OBJECT_ID('tempdb..#CompromisosERP') IS NOT NULL DROP TABLE #CompromisosERP;
+
+CREATE TABLE #CompromisosERP (
+    f430_num_docto_referencia NVARCHAR(50)
+);
+
+INSERT INTO #CompromisosERP
+SELECT DISTINCT f430_num_docto_referencia
+FROM OPENROWSET(
+    'SQLNCLI',
+    'Server=siesa-m4-sqlsw-db6.ceqnrhbwqaoo.us-east-1.rds.amazonaws.com;Database=UnoEE_Pisende_Real;Uid=Pisende;Pwd=Pisende$12$%;',
+    '
+    SELECT DISTINCT TRIM(p.f430_num_docto_referencia) AS f430_num_docto_referencia
+    FROM t430_cm_pv_docto p
+    WHERE p.f430_id_cia = 1 
+      AND p.f430_id_co = ''010''
+      AND p.f430_id_tipo_docto IN (''PED'', ''TMS'')
+      AND (
+          p.f430_ind_estado IN (1, 3, 4) -- 1: Aprobado/Comprometido, 3: Aprobado Parcial, 4: Cumplido/Facturado
+          OR p.f430_ind_remisionado = 1
+          OR p.f430_ind_facturado = 1
+          OR EXISTS (
+              SELECT 1 
+              FROM t431_cm_pv_movto m 
+              WHERE m.f431_rowid_pv_docto = p.f430_rowid 
+                AND m.f431_id_cia = 1
+                AND (m.f431_cant_comprometida_base > 0 OR m.f431_cant_remisionada_base > 0 OR m.f431_cant_facturada_base > 0)
+          )
+      )
+    '
+) AS t;
+
+-- Si el pedido ya tiene compromisos generados, esta aprobado, remisionado o cumplido,
+-- avanzar directamente a Estado 7 (Estado Invoiced Por Integrar)
+UPDATE o
+SET 
+    id_estado           = 7,
+    intentos            = 0,
+    endpoint            = NULL,
+    orden_obj_destino   = NULL
+FROM ordenes o
+INNER JOIN #CompromisosERP c 
+    ON CASE 
+        WHEN LEN(REPLACE(JSON_VALUE(o.orden_obj_origen, '$.orderId'), '-', '')) <= 15 
+            THEN REPLACE(JSON_VALUE(o.orden_obj_origen, '$.orderId'), '-01', '01') 
+        ELSE JSON_VALUE(o.orden_obj_origen, '$.sequence') 
+    END = c.f430_num_docto_referencia
+WHERE o.id_tienda = 1 
+  AND o.id_estado = 6;
+
+-- Filtrar ordenes pendientes de compromiso
 IF OBJECT_ID('tempdb..#ordenes') IS NOT NULL DROP TABLE #ordenes;
 
-SELECT * INTO #ordenes
-FROM ordenes
-WHERE id_tienda = 1 
---and id_orden in ('1567570500364-01')
-AND id_estado = 6
-AND intentos < 3
+SELECT o.* 
+INTO #ordenes
+FROM ordenes o
+LEFT JOIN #CompromisosERP c 
+    ON CASE 
+        WHEN LEN(REPLACE(JSON_VALUE(o.orden_obj_origen, '$.orderId'), '-', '')) <= 15 
+            THEN REPLACE(JSON_VALUE(o.orden_obj_origen, '$.orderId'), '-01', '01') 
+        ELSE JSON_VALUE(o.orden_obj_origen, '$.sequence') 
+    END = c.f430_num_docto_referencia
+WHERE o.id_tienda = 1 
+  AND o.id_estado = 6
+  AND ISNULL(o.intentos, 0) < 3
+  AND c.f430_num_docto_referencia IS NULL;
+
+IF OBJECT_ID('tempdb..#CompromisosERP') IS NOT NULL DROP TABLE #CompromisosERP;
 
 IF EXISTS (SELECT 1 FROM #ordenes)
 BEGIN
@@ -301,7 +360,6 @@ BEGIN
     UPDATE o
     SET
         o.endpoint = t.endpoint,
-        o.intentos = 0,
         o.fecha_creacion = t.fecha_creacion,
         o.orden_obj_destino = t.orden_obj_destino
     FROM ordenes o
