@@ -1,0 +1,204 @@
+{
+    "codigo":  0,
+    "mensaje":  "transacciÃ³n exitosa",
+    "detalle":  {
+                    "CompaÃ±ia":  [
+                                     {
+                                         "IdCompania":  "6618"
+                                     }
+                                 ],
+                    "Conexiones":  [
+                                       {
+                                           "Descripcion":  "Conexion Vtex Estandar",
+                                           "Tipo":  "SqlServer",
+                                           "Conexion":  "+497offhugFDYazK6/faBAE6tgqyhXKwyutHhU3/qZqg5cPhxr62W2nB949Pb8U7Chr+Ke7srrrzpgw+zai46GBL1JuT5InjqKtFkCV/hp3HGbHailjvILgEjezqs1awI0dL/Vkvba+ZSTFNI9fPeA52CoyB8QzLdenSo8o73BA6P00OIAPLeN814fx1fEptaycER0g9ZcnhBwN4cENyVPn8nVl6JVV2BQgCCid5eehhfheO+6brfAVcj966rQGUDVGRNAuKNZMb3qlU3gZr99OlVMZY0w/A0P/SbFjAmf8="
+                                       }
+                                   ],
+                    "Parametros":  [
+                                       {
+                                           "Nombre":  "IdCiaERP",
+                                           "Valor":  "1"
+                                       },
+                                       {
+                                           "Nombre":  "AppKey",
+                                           "Valor":  "vtexappkey-pisende-jyzbte"
+                                       },
+                                       {
+                                           "Nombre":  "AppToken",
+                                           "Valor":  "CHCRBGBEYZRJXWGLGBLXGKSCLOEPYZLPHMMODRQMGPGHQVKGJKHQSVKOZREVMSETBKZHSJMQLHMAAHDDETJRMANIPQOYWLTJWEELLJFZMOQHOPKIPKVVGHHCHDFSPYRN"
+                                       },
+                                       {
+                                           "Nombre":  "ApiCliente",
+                                           "Valor":  "https://pisende.myvtex.com"
+                                       },
+                                       {
+                                           "Nombre":  "Cliente",
+                                           "Valor":  "pisende"
+                                       },
+                                       {
+                                           "Nombre":  "Id_Ecommerce",
+                                           "Valor":  "1"
+                                       },
+                                       {
+                                           "Nombre":  "Id_Tienda",
+                                           "Valor":  "1"
+                                       },
+                                       {
+                                           "Nombre":  "DiasInicioDescargaOrdenes",
+                                           "Valor":  "7"
+                                       },
+                                       {
+                                           "Nombre":  "TamaÃ±oPaquetesERP",
+                                           "Valor":  "15"
+                                       },
+                                       {
+                                           "Nombre":  "TamaÃ±oPaquetesVTEX",
+                                           "Valor":  "100"
+                                       },
+                                       {
+                                           "Nombre":  "Politicas",
+                                           "Valor":  "1"
+                                       },
+                                       {
+                                           "Nombre":  "ApiPoliticasComerciales",
+                                           "Valor":  "/api/catalog/pvt/product/productId/salespolicy/tradepolicyId"
+                                       },
+                                       {
+                                           "Nombre":  "ApiProductosInsertar",
+                                           "Valor":  "/api/catalog/pvt/product"
+                                       },
+                                       {
+                                           "Nombre":  "ApiProductosActualizar",
+                                           "Valor":  "/api/catalog/pvt/product/productId"
+                                       },
+                                       {
+                                           "Nombre":  "ApiProductosEspecificacionesInsertarActualizar",
+                                           "Valor":  "https://{cliente}.myvtex.com/api/catalog_system/pvt/products/{id_producto}/specification"
+                                       },
+                                       {
+                                           "Nombre":  "ApiSkusInsertar",
+                                           "Valor":  "/api/catalog/pvt/stockkeepingunit"
+                                       },
+                                       {
+                                           "Nombre":  "ApiSkusEanInsertar",
+                                           "Valor":  "/api/catalog/pvt/stockkeepingunit/skuId/ean/eanId"
+                                       },
+                                       {
+                                           "Nombre":  "ApiSkusActualizar",
+                                           "Valor":  "/api/catalog/pvt/stockkeepingunit/skuId"
+                                       },
+                                       {
+                                           "Nombre":  "ApiSkusEspecificacionesInsertarActualizar",
+                                           "Valor":  "https://{cliente}.myvtex.com/api/catalog/pvt/stockkeepingunit/{id_sku}/specificationvalue"
+                                       },
+                                       {
+                                           "Nombre":  "ApiPreciosInsertarActualizar",
+                                           "Valor":  "https://api.vtex.com/{accountName}/pricing/prices/itemId"
+                                       },
+                                       {
+                                           "Nombre":  "ApiInventariosInsertarActualizar",
+                                           "Valor":  "/api/logistics/pvt/inventory/skus/skuId/warehouses/warehouseId"
+                                       },
+                                       {
+                                           "Nombre":  "ApiListadoSkusId",
+                                           "Valor":  "/api/catalog_system/pvt/sku/stockkeepingunitids?page=contador\u0026pagesize=1000"
+                                       },
+                                       {
+                                           "Nombre":  "ApiDescargarSku",
+                                           "Valor":  "/api/catalog/pvt/stockkeepingunit/skuId"
+                                       },
+                                       {
+                                           "Nombre":  "ApiDescargarEan",
+                                           "Valor":  "/api/catalog/pvt/stockkeepingunit/skuId/ean"
+                                       },
+                                       {
+                                           "Nombre":  "ApiDescargarProducto",
+                                           "Valor":  "/api/catalog/pvt/product/productId"
+                                       },
+                                       {
+                                           "Nombre":  "ApiDescargarPedidoEncabezado",
+                                           "Valor":  "/api/oms/pvt/orders/?orderBy=creationDate,desc\u0026per_page=100\u0026page=contador\u0026f_status=ready-for-handling\u0026f_creationDate=creationDate:[fechaIncialT02:00:00.000Z TO fechaFinalT01:59:59.999Z]"
+                                       },
+                                       {
+                                           "Nombre":  "ApiDescargarPedidoDetalle",
+                                           "Valor":  "/api/oms/pvt/orders/orderId"
+                                       },
+                                       {
+                                           "Nombre":  "ApiCorreoActualizar",
+                                           "Valor":  "/api/dataentities/CL/search?document=Documento"
+                                       },
+                                       {
+                                           "Nombre":  "ApiEstadoStartHandling",
+                                           "Valor":  "/api/oms/pvt/orders/OrderId/start-handling"
+                                       },
+                                       {
+                                           "Nombre":  "ApiEstadoInvoicing",
+                                           "Valor":  "/api/oms/pvt/orders/OrderId/invoice"
+                                       },
+                                       {
+                                           "Nombre":  "WebServiceSoap",
+                                           "Valor":  "http://webservice-pisende.vtexcommerce.com.br/service.svc?wsdl"
+                                       }
+                                   ],
+                    "ParametrosEcosistema":  [
+                                                 {
+                                                     "Nombre":  "IdCiaERP",
+                                                     "Valor":  "1"
+                                                 },
+                                                 {
+                                                     "Nombre":  "UsuarioERP",
+                                                     "Valor":  "vtex"
+                                                 },
+                                                 {
+                                                     "Nombre":  "ClaveERP",
+                                                     "Valor":  "P1234567"
+                                                 },
+                                                 {
+                                                     "Nombre":  "WebServiceERP",
+                                                     "Valor":  "https://wspisende.siesacloud.com:8043/WSUNOEE/WSUNOEE.asmx"
+                                                 },
+                                                 {
+                                                     "Nombre":  "NombreConexionERP",
+                                                     "Valor":  "UnoEE_Pisende_Real"
+                                                 }
+                                             ],
+                    "InterfacesPorSistemas":  [
+                                                  {
+                                                      "Id":  "6005",
+                                                      "Descripcion":  "Vtex_Insertar_Actualizar_Inventarios"
+                                                  },
+                                                  {
+                                                      "Id":  "5998",
+                                                      "Descripcion":  "Vtex_Insertar_Productos"
+                                                  },
+                                                  {
+                                                      "Id":  "6001",
+                                                      "Descripcion":  "Vtex_Insertar_Skus"
+                                                  },
+                                                  {
+                                                      "Id":  "6004",
+                                                      "Descripcion":  "Vtex_Insertar_Actualizar_Precios"
+                                                  },
+                                                  {
+                                                      "Id":  "6007",
+                                                      "Descripcion":  "Vtex_Descargar_Ordenes"
+                                                  },
+                                                  {
+                                                      "Id":  "6008",
+                                                      "Descripcion":  "Vtex_Importar_Ordenes_ERP"
+                                                  },
+                                                  {
+                                                      "Id":  "6000",
+                                                      "Descripcion":  "Vtex_Insertar_Actualizar_Especificaciones_Productos\t"
+                                                  },
+                                                  {
+                                                      "Id":  "6011",
+                                                      "Descripcion":  "Vtex_Cambio_Estado_Invoiced"
+                                                  },
+                                                  {
+                                                      "Id":  "6009",
+                                                      "Descripcion":  "Vtex_Cambio_Estado_Start_Handling"
+                                                  }
+                                              ]
+                }
+}
