@@ -1,0 +1,45 @@
+info:
+  name: UPDATE_PriceListValue_GraphQL
+  type: graphql
+  seq: 1
+
+graphql:
+  method: POST
+  url: "{{Padova-GraphQL-URL}}"
+  headers:
+    - name: X-Shopify-Access-Token
+      value: "{{X-Shopify-Access-Token}}"
+    - name: Content-Type
+      value: application/json
+  body:
+    query: |-
+      mutation {
+        priceListFixedPricesUpdate(
+          priceListId: "gid://shopify/PriceList/{{Price-List-Id-Internacional}}"
+          pricesToAdd: [
+            {
+              variantId: "gid://shopify/ProductVariant/44249013190755"
+              price: { amount: "161.00", currencyCode: USD }
+            }
+          ]
+          variantIdsToDelete: []
+        ) {
+          pricesAdded {
+            variant { id sku }
+            price { amount currencyCode }
+          }
+          deletedFixedPriceVariantIds
+          userErrors {
+            field
+            message
+            code
+          }
+        }
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

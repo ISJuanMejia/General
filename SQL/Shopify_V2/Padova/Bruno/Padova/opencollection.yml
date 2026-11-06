@@ -1,0 +1,34 @@
+opencollection: 1.0.0
+
+info:
+  name: Padova
+config:
+  proxy:
+    inherit: true
+    config:
+      protocol: http
+      hostname: ""
+      port: ""
+      auth:
+        username: ""
+        password: ""
+      bypassProxy: ""
+
+request:
+  variables:
+    - name: X-Shopify-Access-Token
+      value: "{{SHOPIFY_ACCESS_TOKEN}}"
+    - name: Padova-GraphQL-URL
+      value: https://5f4729-2a.myshopify.com/admin/api/2025-10/graphql.json
+    - name: Price-List-Id-Col
+      value: "20741685347"
+    - name: Price-List-Id-By-Market
+      value: "20826161251"
+    - name: Price-List-Id-Internacional
+      value: "20826587235"
+bundled: false
+extensions:
+  bruno:
+    ignore:
+      - node_modules
+      - .git

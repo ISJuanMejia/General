@@ -1,0 +1,29 @@
+﻿info:
+  name: GET_PriceListPrices_GraphQL
+  type: graphql
+  seq: 1
+
+graphql:
+  method: POST
+  url: "{{Padova-GraphQL-URL}}"
+  headers:
+    - name: X-Shopify-Access-Token
+      value: "{{X-Shopify-Access-Token}}"
+    - name: Content-Type
+      value: application/json
+  body:
+    query: |-
+      query {
+        priceList(id: "gid://shopify/PriceList/{{Price-List-Id-Col}}") {
+          prices(first: 250) {
+            edges { node { variant { id sku } price { amount currencyCode } originType } }
+          }
+        }
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

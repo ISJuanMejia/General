@@ -1,0 +1,38 @@
+info:
+  name: GET_PriceListPriceByVariant_GraphQL
+  type: graphql
+  seq: 1
+
+graphql:
+  method: POST
+  url: "{{Padova-GraphQL-URL}}"
+  headers:
+    - name: X-Shopify-Access-Token
+      value: "{{X-Shopify-Access-Token}}"
+    - name: Content-Type
+      value: application/json
+  body:
+    query: |-
+      query {
+        priceList(id: "gid://shopify/PriceList/{{Price-List-Id-Internacional}}") {
+          name
+          currency
+          prices(first: 10, query: "variant_id:44249013059683") {
+            edges {
+              node {
+                variant { id sku title }
+                price { amount currencyCode }
+                compareAtPrice { amount currencyCode }
+                originType
+              }
+            }
+          }
+        }
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -1,0 +1,32 @@
+﻿info:
+  name: GET_VariantContextualPricing_GraphQL
+  type: graphql
+  seq: 4
+
+graphql:
+  method: POST
+  url: "{{Padova-GraphQL-URL}}"
+  headers:
+    - name: X-Shopify-Access-Token
+      value: "{{X-Shopify-Access-Token}}"
+    - name: Content-Type
+      value: application/json
+  body:
+    query: |-
+      query {
+        productVariant(id: "gid://shopify/ProductVariant/44249013059683") {
+          sku
+          price
+          contextualPricing(context: { country: US }) {
+            price { amount currencyCode }
+            compareAtPrice { amount currencyCode }
+          }
+        }
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
