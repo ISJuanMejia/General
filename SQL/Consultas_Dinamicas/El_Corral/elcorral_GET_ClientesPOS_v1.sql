@@ -24,14 +24,12 @@ SELECT
         WHEN fidelizados.f9741_id_cliente_pdv IS NOT NULL THEN 'Si'
         ELSE 'No'
     END AS fidelizado_leal
-FROM t9740_pdv_clientes t9740
-LEFT JOIN (
-    SELECT DISTINCT f9741_id_cia, f9741_id_cliente_pdv
-    FROM t9741_pdv_criterios_clientes
-    WHERE f9741_id_plan_criterios = 'PDV'
-      AND f9741_id_criterio_mayor = '0004'
-) fidelizados ON t9740.f9740_id_cia = fidelizados.f9741_id_cia
-             AND t9740.f9740_id = fidelizados.f9741_id_cliente_pdv
+FROM t9740_pdv_clientes t9740 WITH (NOLOCK)
+LEFT JOIN t9741_pdv_criterios_clientes fidelizados WITH (NOLOCK)
+    ON fidelizados.f9741_id_cia = t9740.f9740_id_cia
+   AND fidelizados.f9741_id_cliente_pdv = t9740.f9740_id
+   AND fidelizados.f9741_id_plan_criterios = 'PDV'
+   AND fidelizados.f9741_id_criterio_mayor = '0004'
 WHERE t9740.f9740_id_cia = 1
   AND (
         (@id_cliente = '-1' AND @correo_cliente = '-1') OR

@@ -3,6 +3,9 @@ DECLARE @fecha_ts_actualizacion   VARCHAR(14)  = '-1';  -- Formato ISO: AAAAMMDD
 DECLARE @id_co                    VARCHAR(20)  = '-1';
 --DECLARE @nrodocto INT  = '134386'
 
+SET @id_cliente_pdv = RTRIM(@id_cliente_pdv);
+SET @id_co          = RTRIM(@id_co);
+
 DECLARE @fecha_ts_actualizacion_dt DATETIME;
 
 IF @fecha_ts_actualizacion <> '-1'
@@ -43,11 +46,34 @@ DECLARE @fecha_desde DATETIME =
         ELSE @fecha_ts_actualizacion_dt
     END;
 
+-- Límite inferior indexado sobre id_fecha_docto (con 1 día de holgura para cierres nocturnos)
+DECLARE @fecha_docto_min DATETIME = DATEADD(DAY, DATEDIFF(DAY, 0, @fecha_desde) - 1, 0);
 
+DROP TABLE IF EXISTS #candidatos_9920;
 DROP TABLE IF EXISTS #documentos;
 DROP TABLE IF EXISTS #documentos_claves;
 DROP TABLE IF EXISTS #pagos_detalle;
 DROP TABLE IF EXISTS #pagos;
+
+-- Pre-filtrado 100% cubierto en IX_t9920_4 (f9920_id_cliente_pdv, f9920_id_fecha_docto -> f9920_guid)
+-- Evita millones de Key Lookups sobre los 121.7M de registros de t9920_pdv_a_doctos
+SELECT
+    t9920.f9920_guid AS guid_docto
+INTO #candidatos_9920
+FROM t9741_pdv_criterios_clientes criterio WITH (NOLOCK)
+INNER JOIN t9920_pdv_a_doctos t9920 WITH (NOLOCK, INDEX(IX_t9920_4))
+    ON t9920.f9920_id_cliente_pdv = criterio.f9741_id_cliente_pdv
+   AND t9920.f9920_id_fecha_docto >= @fecha_docto_min
+WHERE criterio.f9741_id_cia = 1
+  AND criterio.f9741_id_criterio_mayor = '0004'
+  AND criterio.f9741_id_plan_criterios = 'PDV'
+  AND (
+         @id_cliente_pdv = '-1'
+      OR criterio.f9741_id_cliente_pdv = @id_cliente_pdv
+  )
+OPTION (RECOMPILE);
+
+CREATE UNIQUE CLUSTERED INDEX IX_cand_9920 ON #candidatos_9920 (guid_docto);
 
 SELECT
      CAST('D' AS CHAR(1)) AS origen
@@ -85,13 +111,7 @@ SELECT
         ELSE 'Otros'
      END AS marca
 
-	 ,(
-        SELECT TOP 1
-            t9757.f9757_id
-        FROM t9757_pdv_tipos_entrega t9757 WITH (NOLOCK)
-        WHERE t9757.f9757_rowid =
-              t9820.f9820_rowid_tipo_entrega
-     ) AS Tipo_Entrega
+    ,t9757.f9757_id AS Tipo_Entrega
 
 INTO #documentos
 
@@ -106,12 +126,18 @@ INNER JOIN t9820_pdv_d_doctos t9820 WITH (NOLOCK)
 
 INNER JOIN t9750_pdv_tpv t9750 WITH (NOLOCK)
     ON t9750.f9750_rowid = t9820.f9820_rowid_tpv
-	--AND t9820.f9820_consec_docto = @nrodocto
-WHERE EXISTS
+    --AND t9820.f9820_consec_docto = @nrodocto
+
+LEFT JOIN t9757_pdv_tipos_entrega t9757 WITH (NOLOCK)
+    ON t9757.f9757_rowid = t9820.f9820_rowid_tipo_entrega
+
+WHERE t9740.f9740_id_cia = 1
+AND EXISTS
 (
     SELECT 1
     FROM t9741_pdv_criterios_clientes criterio WITH (NOLOCK)
-    WHERE criterio.f9741_id_cliente_pdv = t9740.f9740_id
+    WHERE criterio.f9741_id_cia = t9740.f9740_id_cia
+      AND criterio.f9741_id_cliente_pdv = t9740.f9740_id
       AND criterio.f9741_id_criterio_mayor = '0004'
       AND criterio.f9741_id_plan_criterios = 'PDV'
 )
@@ -120,6 +146,7 @@ AND
        @id_cliente_pdv = '-1'
     OR t9740.f9740_id = @id_cliente_pdv
 )
+AND t9820.f9820_id_fecha_docto >= @fecha_docto_min
 AND t9820.f9820_fecha_ts_actualizacion >= @fecha_desde
 AND
 (
@@ -167,47 +194,37 @@ SELECT
         ELSE 'Otros'
      END AS marca
 
-	 ,(
-        SELECT TOP 1
-            t9757.f9757_id
-        FROM t9757_pdv_tipos_entrega t9757 WITH (NOLOCK)
-        WHERE t9757.f9757_rowid =
-              t9920.f9920_rowid_tipo_entrega
-     ) AS Tipo_Entrega
+    ,t9757.f9757_id AS Tipo_Entrega
 
-FROM t9740_pdv_clientes t9740 WITH (NOLOCK)
-
-INNER JOIN t010_mm_companias t010 WITH (NOLOCK)
-    ON t010.f010_id = t9740.f9740_id_cia
+FROM #candidatos_9920 cand
 
 INNER JOIN t9920_pdv_a_doctos t9920 WITH (NOLOCK)
-    ON t9920.f9920_id_cia = t9740.f9740_id_cia
-   AND t9920.f9920_id_cliente_pdv = t9740.f9740_id
+    ON t9920.f9920_guid = cand.guid_docto
+
+INNER JOIN t9740_pdv_clientes t9740 WITH (NOLOCK)
+    ON t9740.f9740_id_cia = t9920.f9920_id_cia
+   AND t9740.f9740_id = t9920.f9920_id_cliente_pdv
+
+INNER JOIN t010_mm_companias t010 WITH (NOLOCK)
+    ON t010.f010_id = t9920.f9920_id_cia
 
 INNER JOIN t9750_pdv_tpv t9750 WITH (NOLOCK)
     ON t9750.f9750_rowid = t9920.f9920_rowid_tpv
-	--AND t9920.f9920_consec_docto = @nrodocto
-WHERE EXISTS
-(
-    SELECT 1
-    FROM t9741_pdv_criterios_clientes criterio WITH (NOLOCK)
-    WHERE criterio.f9741_id_cliente_pdv = t9740.f9740_id
-      AND criterio.f9741_id_criterio_mayor = '0004'
-      AND criterio.f9741_id_plan_criterios = 'PDV'
-)
-AND
-(
-       @id_cliente_pdv = '-1'
-    OR t9740.f9740_id = @id_cliente_pdv
-)
-AND t9920.f9920_fecha_ts_actualizacion >= @fecha_desde
-AND
-(
-       @id_co = '-1'
-    OR t9920.f9920_id_co = @id_co
-)
+    --AND t9920.f9920_consec_docto = @nrodocto
+
+LEFT JOIN t9757_pdv_tipos_entrega t9757 WITH (NOLOCK)
+    ON t9757.f9757_rowid = t9920.f9920_rowid_tipo_entrega
+
+WHERE t9920.f9920_id_cia = 1
+  AND t9920.f9920_fecha_ts_actualizacion >= @fecha_desde
+  AND (
+         @id_co = '-1'
+      OR t9920.f9920_id_co = @id_co
+  )
 
 OPTION (RECOMPILE);
+
+DROP TABLE IF EXISTS #candidatos_9920;
 
 CREATE NONCLUSTERED INDEX IX_documentos_origen_guid
 ON #documentos
@@ -368,7 +385,7 @@ SELECT
     ,documento.marca
     ,pago.id_medio_pago
     ,pago.descripcion_medio_pago
-	,documento.Tipo_Entrega
+    ,documento.Tipo_Entrega
 
 FROM #documentos documento
 

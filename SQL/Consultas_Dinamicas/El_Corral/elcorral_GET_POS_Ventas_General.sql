@@ -36,6 +36,12 @@ END
 SET @id_cliente = RTRIM(@id_cliente);
 SET @id_co      = RTRIM(@id_co);
 
+-- Conversión nativa a DATETIME (tipo exacto de Siesa) y límites indexados para f9820_id_fecha_docto / f9920_id_fecha_docto
+DECLARE @fecha_inicio_siesa DATETIME = CAST(@fecha_inicio_dt AS DATETIME);
+DECLARE @fecha_fin_siesa    DATETIME = CAST(@fecha_fin_dt    AS DATETIME);
+DECLARE @fecha_docto_min    DATETIME = DATEADD(DAY, DATEDIFF(DAY, 0, @fecha_inicio_siesa) - 1, 0);
+DECLARE @fecha_docto_max    DATETIME = DATEADD(DAY, DATEDIFF(DAY, 0, @fecha_fin_siesa)    + 1, 0);
+
 -- =====================================================================
 -- Clientes excluidos (IDs de prueba/demo)
 -- =====================================================================
@@ -64,42 +70,39 @@ IF OBJECT_ID('tempdb..#table_ventas_items',      'U') IS NOT NULL DROP TABLE #ta
 -- =====================================================================
 -- Tablas temporales como HEAP + índice NONCLUSTERED en guid_docto
 --
--- Sin PRIMARY KEY CLUSTERED sobre guid_docto ni guid_movto_venta:
--- ambas son columnas GUID (nvarchar aleatorio). Insertar en un B-tree
--- con claves aleatorias genera page splits en cada fila → degrada
--- el INSERT proporcionalmente al volumen.
--- El HEAP permite INSERT secuencial sin fragmentación.
--- El índice NONCLUSTERED en guid_docto cubre los seeks del SELECT final.
+-- Se usa UNIQUEIDENTIFIER nativo (16 bytes) en lugar de NVARCHAR(255)
+-- para preservar SARGability y habilitar Index Seek directo sobre
+-- IX_t9930_12 (598M filas) e IFK_t9921_t9920_1 (203M filas).
 -- =====================================================================
 CREATE TABLE #table_ventas_generales
 (
-    guid_docto          nvarchar(255) NOT NULL,
-    documento           nvarchar(255),
+    guid_docto          UNIQUEIDENTIFIER NOT NULL,
+    documento           NVARCHAR(255),
     tipo_concepto       VARCHAR(20),
     id_cliente          VARCHAR(20),
-    subtotal            decimal(18,2),
-    impuestos           decimal(18,2),
-    descuentos          decimal(18,2),
-    total               decimal(18,2),
-    fecha_docto         date,
-    fecha_venta         datetime,
-    fecha_actualizacion datetime
+    subtotal            DECIMAL(18,2),
+    impuestos           DECIMAL(18,2),
+    descuentos          DECIMAL(18,2),
+    total               DECIMAL(18,2),
+    fecha_docto         DATE,
+    fecha_venta         DATETIME,
+    fecha_actualizacion DATETIME
 );
 CREATE NONCLUSTERED INDEX IX_tvg_guid_docto ON #table_ventas_generales (guid_docto);
 
 CREATE TABLE #table_ventas_medios_pago
 (
-    guid_docto             nvarchar(255) NOT NULL,
+    guid_docto             UNIQUEIDENTIFIER NOT NULL,
     id_medio_pago          VARCHAR(5),
     descripcion_medio_pago VARCHAR(255),
-    valor_neto             decimal(18,2)
+    valor_neto             DECIMAL(18,2)
 );
 CREATE NONCLUSTERED INDEX IX_mp_guid_docto ON #table_ventas_medios_pago (guid_docto);
 
 CREATE TABLE #table_ventas_items
 (
-    guid_docto        nvarchar(255) NOT NULL,
-    guid_movto_venta  nvarchar(255) NOT NULL,
+    guid_docto        UNIQUEIDENTIFIER NOT NULL,
+    guid_movto_venta  UNIQUEIDENTIFIER NOT NULL,
     id_item           VARCHAR(20),
     descripcion_item  VARCHAR(255),
     id_ext1_detalle   VARCHAR(255),
@@ -108,12 +111,12 @@ CREATE TABLE #table_ventas_items
     id_concepto       VARCHAR(20),
     id_motivo         VARCHAR(20),
     tipo_item         VARCHAR(20),
-    cantidad          decimal(18,2),
-    precio_unitario   decimal(18,2),
-    valor_bruto       decimal(18,2),
-    valor_dscto       decimal(18,2),
-    valor_impuesto    decimal(18,2),
-    valor_neto        decimal(18,2)
+    cantidad          DECIMAL(18,2),
+    precio_unitario   DECIMAL(18,2),
+    valor_bruto       DECIMAL(18,2),
+    valor_dscto       DECIMAL(18,2),
+    valor_impuesto    DECIMAL(18,2),
+    valor_neto        DECIMAL(18,2)
 );
 CREATE NONCLUSTERED INDEX IX_items_guid_docto ON #table_ventas_items (guid_docto);
 
@@ -122,7 +125,7 @@ CREATE NONCLUSTERED INDEX IX_items_guid_docto ON #table_ventas_items (guid_docto
 -- =====================================================================
 IF @id_cliente = '-1' AND @id_co = '-1'
 BEGIN
-    -- Ruta 1: sin filtro de cliente ni CO
+    -- Ruta 1: sin filtro de cliente ni CO (usa IX_t9820_2 / IX_t9920_2)
     INSERT INTO #table_ventas_generales
         (guid_docto, documento, tipo_concepto, id_cliente, subtotal, impuestos, descuentos, total, fecha_docto, fecha_venta, fecha_actualizacion)
     SELECT f9820_guid
@@ -131,11 +134,12 @@ BEGIN
           ,f9820_id_cliente_pdv, f9820_valor_bruto, f9820_valor_imp
           ,f9820_valor_dscto_global + f9820_valor_dscto_linea, f9820_valor_neto
           ,f9820_id_fecha_docto, f9820_fecha_ts_creacion, f9820_fecha_ts_actualizacion
-    FROM t9820_pdv_d_doctos
+    FROM t9820_pdv_d_doctos WITH (NOLOCK)
     WHERE f9820_id_cia      = 1
-      AND f9820_id_concepto IN (1201, 1202)
+      AND f9820_id_fecha_docto BETWEEN @fecha_docto_min AND @fecha_docto_max
       AND f9820_ind_estado  = 1
-      AND f9820_fecha_ts_actualizacion BETWEEN @fecha_inicio_dt AND @fecha_fin_dt
+      AND f9820_id_concepto IN (1201, 1202)
+      AND f9820_fecha_ts_actualizacion BETWEEN @fecha_inicio_siesa AND @fecha_fin_siesa
       AND NOT EXISTS (SELECT 1 FROM @clientes_excluidos WHERE id_cliente = f9820_id_cliente_pdv)
     OPTION (RECOMPILE);
 
@@ -147,17 +151,18 @@ BEGIN
           ,f9920_id_cliente_pdv, f9920_valor_bruto, f9920_valor_imp
           ,f9920_valor_dscto_global + f9920_valor_dscto_linea, f9920_valor_neto
           ,f9920_id_fecha_docto, f9920_fecha_ts_creacion, f9920_fecha_ts_actualizacion
-    FROM t9920_pdv_a_doctos
+    FROM t9920_pdv_a_doctos WITH (NOLOCK)
     WHERE f9920_id_cia      = 1
-      AND f9920_id_concepto IN (1201, 1202)
+      AND f9920_id_fecha_docto BETWEEN @fecha_docto_min AND @fecha_docto_max
       AND f9920_ind_estado  = 1
-      AND f9920_fecha_ts_actualizacion BETWEEN @fecha_inicio_dt AND @fecha_fin_dt
+      AND f9920_id_concepto IN (1201, 1202)
+      AND f9920_fecha_ts_actualizacion BETWEEN @fecha_inicio_siesa AND @fecha_fin_siesa
       AND NOT EXISTS (SELECT 1 FROM @clientes_excluidos WHERE id_cliente = f9920_id_cliente_pdv)
     OPTION (RECOMPILE);
 END
 ELSE IF @id_cliente = '-1' AND @id_co <> '-1'
 BEGIN
-    -- Ruta 2: filtro solo por centro de operación
+    -- Ruta 2: filtro solo por centro de operación (usa IX_t9820_2 / IX_t9920_2)
     INSERT INTO #table_ventas_generales
         (guid_docto, documento, tipo_concepto, id_cliente, subtotal, impuestos, descuentos, total, fecha_docto, fecha_venta, fecha_actualizacion)
     SELECT f9820_guid
@@ -166,11 +171,12 @@ BEGIN
           ,f9820_id_cliente_pdv, f9820_valor_bruto, f9820_valor_imp
           ,f9820_valor_dscto_global + f9820_valor_dscto_linea, f9820_valor_neto
           ,f9820_id_fecha_docto, f9820_fecha_ts_creacion, f9820_fecha_ts_actualizacion
-    FROM t9820_pdv_d_doctos
+    FROM t9820_pdv_d_doctos WITH (NOLOCK)
     WHERE f9820_id_cia      = 1
-      AND f9820_id_concepto IN (1201, 1202)
+      AND f9820_id_fecha_docto BETWEEN @fecha_docto_min AND @fecha_docto_max
       AND f9820_ind_estado  = 1
-      AND f9820_fecha_ts_actualizacion BETWEEN @fecha_inicio_dt AND @fecha_fin_dt
+      AND f9820_id_concepto IN (1201, 1202)
+      AND f9820_fecha_ts_actualizacion BETWEEN @fecha_inicio_siesa AND @fecha_fin_siesa
       AND f9820_id_co IN (SELECT id_co FROM @tbl_cos)
       AND NOT EXISTS (SELECT 1 FROM @clientes_excluidos WHERE id_cliente = f9820_id_cliente_pdv)
     OPTION (RECOMPILE);
@@ -183,18 +189,19 @@ BEGIN
           ,f9920_id_cliente_pdv, f9920_valor_bruto, f9920_valor_imp
           ,f9920_valor_dscto_global + f9920_valor_dscto_linea, f9920_valor_neto
           ,f9920_id_fecha_docto, f9920_fecha_ts_creacion, f9920_fecha_ts_actualizacion
-    FROM t9920_pdv_a_doctos
+    FROM t9920_pdv_a_doctos WITH (NOLOCK)
     WHERE f9920_id_cia      = 1
-      AND f9920_id_concepto IN (1201, 1202)
+      AND f9920_id_fecha_docto BETWEEN @fecha_docto_min AND @fecha_docto_max
       AND f9920_ind_estado  = 1
-      AND f9920_fecha_ts_actualizacion BETWEEN @fecha_inicio_dt AND @fecha_fin_dt
+      AND f9920_id_concepto IN (1201, 1202)
+      AND f9920_fecha_ts_actualizacion BETWEEN @fecha_inicio_siesa AND @fecha_fin_siesa
       AND f9920_id_co IN (SELECT id_co FROM @tbl_cos)
       AND NOT EXISTS (SELECT 1 FROM @clientes_excluidos WHERE id_cliente = f9920_id_cliente_pdv)
     OPTION (RECOMPILE);
 END
 ELSE IF @id_cliente <> '-1' AND @id_co = '-1'
 BEGIN
-    -- Ruta 3: filtro solo por cliente
+    -- Ruta 3: filtro solo por cliente (usa IX_t9820_4 / IX_t9920_4 en ambas columnas)
     INSERT INTO #table_ventas_generales
         (guid_docto, documento, tipo_concepto, id_cliente, subtotal, impuestos, descuentos, total, fecha_docto, fecha_venta, fecha_actualizacion)
     SELECT f9820_guid
@@ -203,12 +210,13 @@ BEGIN
           ,f9820_id_cliente_pdv, f9820_valor_bruto, f9820_valor_imp
           ,f9820_valor_dscto_global + f9820_valor_dscto_linea, f9820_valor_neto
           ,f9820_id_fecha_docto, f9820_fecha_ts_creacion, f9820_fecha_ts_actualizacion
-    FROM t9820_pdv_d_doctos
+    FROM t9820_pdv_d_doctos WITH (NOLOCK)
     WHERE f9820_id_cia      = 1
+      AND f9820_id_cliente_pdv IN (SELECT id_cliente FROM @tbl_clientes)
+      AND f9820_id_fecha_docto BETWEEN @fecha_docto_min AND @fecha_docto_max
       AND f9820_id_concepto IN (1201, 1202)
       AND f9820_ind_estado  = 1
-      AND f9820_fecha_ts_actualizacion BETWEEN @fecha_inicio_dt AND @fecha_fin_dt
-      AND f9820_id_cliente_pdv IN (SELECT id_cliente FROM @tbl_clientes)
+      AND f9820_fecha_ts_actualizacion BETWEEN @fecha_inicio_siesa AND @fecha_fin_siesa
       AND NOT EXISTS (SELECT 1 FROM @clientes_excluidos WHERE id_cliente = f9820_id_cliente_pdv)
     OPTION (RECOMPILE);
 
@@ -220,18 +228,19 @@ BEGIN
           ,f9920_id_cliente_pdv, f9920_valor_bruto, f9920_valor_imp
           ,f9920_valor_dscto_global + f9920_valor_dscto_linea, f9920_valor_neto
           ,f9920_id_fecha_docto, f9920_fecha_ts_creacion, f9920_fecha_ts_actualizacion
-    FROM t9920_pdv_a_doctos
+    FROM t9920_pdv_a_doctos WITH (NOLOCK)
     WHERE f9920_id_cia      = 1
+      AND f9920_id_cliente_pdv IN (SELECT id_cliente FROM @tbl_clientes)
+      AND f9920_id_fecha_docto BETWEEN @fecha_docto_min AND @fecha_docto_max
       AND f9920_id_concepto IN (1201, 1202)
       AND f9920_ind_estado  = 1
-      AND f9920_fecha_ts_actualizacion BETWEEN @fecha_inicio_dt AND @fecha_fin_dt
-      AND f9920_id_cliente_pdv IN (SELECT id_cliente FROM @tbl_clientes)
+      AND f9920_fecha_ts_actualizacion BETWEEN @fecha_inicio_siesa AND @fecha_fin_siesa
       AND NOT EXISTS (SELECT 1 FROM @clientes_excluidos WHERE id_cliente = f9920_id_cliente_pdv)
     OPTION (RECOMPILE);
 END
 ELSE
 BEGIN
-    -- Ruta 4: filtro por cliente Y centro de operación
+    -- Ruta 4: filtro por cliente Y centro de operación (usa IX_t9820_4 / IX_t9920_4 en ambas columnas)
     INSERT INTO #table_ventas_generales
         (guid_docto, documento, tipo_concepto, id_cliente, subtotal, impuestos, descuentos, total, fecha_docto, fecha_venta, fecha_actualizacion)
     SELECT f9820_guid
@@ -240,12 +249,13 @@ BEGIN
           ,f9820_id_cliente_pdv, f9820_valor_bruto, f9820_valor_imp
           ,f9820_valor_dscto_global + f9820_valor_dscto_linea, f9820_valor_neto
           ,f9820_id_fecha_docto, f9820_fecha_ts_creacion, f9820_fecha_ts_actualizacion
-    FROM t9820_pdv_d_doctos
+    FROM t9820_pdv_d_doctos WITH (NOLOCK)
     WHERE f9820_id_cia      = 1
+      AND f9820_id_cliente_pdv IN (SELECT id_cliente FROM @tbl_clientes)
+      AND f9820_id_fecha_docto BETWEEN @fecha_docto_min AND @fecha_docto_max
       AND f9820_id_concepto IN (1201, 1202)
       AND f9820_ind_estado  = 1
-      AND f9820_fecha_ts_actualizacion BETWEEN @fecha_inicio_dt AND @fecha_fin_dt
-      AND f9820_id_cliente_pdv IN (SELECT id_cliente FROM @tbl_clientes)
+      AND f9820_fecha_ts_actualizacion BETWEEN @fecha_inicio_siesa AND @fecha_fin_siesa
       AND f9820_id_co          IN (SELECT id_co      FROM @tbl_cos)
       AND NOT EXISTS (SELECT 1 FROM @clientes_excluidos WHERE id_cliente = f9820_id_cliente_pdv)
     OPTION (RECOMPILE);
@@ -258,19 +268,20 @@ BEGIN
           ,f9920_id_cliente_pdv, f9920_valor_bruto, f9920_valor_imp
           ,f9920_valor_dscto_global + f9920_valor_dscto_linea, f9920_valor_neto
           ,f9920_id_fecha_docto, f9920_fecha_ts_creacion, f9920_fecha_ts_actualizacion
-    FROM t9920_pdv_a_doctos
+    FROM t9920_pdv_a_doctos WITH (NOLOCK)
     WHERE f9920_id_cia      = 1
+      AND f9920_id_cliente_pdv IN (SELECT id_cliente FROM @tbl_clientes)
+      AND f9920_id_fecha_docto BETWEEN @fecha_docto_min AND @fecha_docto_max
       AND f9920_id_concepto IN (1201, 1202)
       AND f9920_ind_estado  = 1
-      AND f9920_fecha_ts_actualizacion BETWEEN @fecha_inicio_dt AND @fecha_fin_dt
-      AND f9920_id_cliente_pdv IN (SELECT id_cliente FROM @tbl_clientes)
+      AND f9920_fecha_ts_actualizacion BETWEEN @fecha_inicio_siesa AND @fecha_fin_siesa
       AND f9920_id_co          IN (SELECT id_co      FROM @tbl_cos)
       AND NOT EXISTS (SELECT 1 FROM @clientes_excluidos WHERE id_cliente = f9920_id_cliente_pdv)
     OPTION (RECOMPILE);
 END
 
 -- =====================================================================
--- Medios de pago
+-- Medios de pago (Index Seek directo en IFK_t9821_t9820_1 e IFK_t9921_t9920_1)
 -- =====================================================================
 INSERT INTO #table_ventas_medios_pago (guid_docto, id_medio_pago, descripcion_medio_pago, valor_neto)
 SELECT
@@ -278,8 +289,8 @@ SELECT
     ,t9821.f9821_id_medio_pago
     ,mp.f025_descripcion
     ,t9821.f9821_valor_ingreso - t9821.f9821_valor_egreso
-FROM t9821_pdv_d_movto_mp t9821
-INNER JOIN t025_mm_medios_pago mp
+FROM t9821_pdv_d_movto_mp t9821 WITH (NOLOCK)
+INNER JOIN t025_mm_medios_pago mp WITH (NOLOCK)
     ON mp.f025_id = t9821.f9821_id_medio_pago AND mp.f025_id_cia = 1
 INNER JOIN #table_ventas_generales tvg
     ON tvg.guid_docto = t9821.f9821_guid_docto
@@ -292,15 +303,15 @@ SELECT
     ,t9921.f9921_id_medio_pago
     ,mp.f025_descripcion
     ,t9921.f9921_valor_ingreso - t9921.f9921_valor_egreso
-FROM t9921_pdv_a_movto_mp t9921
-INNER JOIN t025_mm_medios_pago mp
+FROM t9921_pdv_a_movto_mp t9921 WITH (NOLOCK)
+INNER JOIN t025_mm_medios_pago mp WITH (NOLOCK)
     ON mp.f025_id = t9921.f9921_id_medio_pago AND mp.f025_id_cia = 1
 INNER JOIN #table_ventas_generales tvg
     ON tvg.guid_docto = t9921.f9921_guid_docto
 WHERE t9921.f9921_ind_naturaleza = 1;
 
 -- =====================================================================
--- Ítems de venta
+-- Ítems de venta (Index Seek directo en IX_t9830_1 e IX_t9930_12)
 -- =====================================================================
 INSERT INTO #table_ventas_items
     (guid_docto, guid_movto_venta, id_item, descripcion_item, id_ext1_detalle, id_ext2_detalle,
@@ -323,10 +334,10 @@ SELECT
     ,t9830.f9830_cant_base, t9830.f9830_precio_uni, t9830.f9830_vlr_bruto
     ,t9830.f9830_vlr_dscto_linea + t9830.f9830_vlr_dscto_global
     ,t9830.f9830_vlr_imp, t9830.f9830_vlr_neto
-FROM t9830_pdv_d_movto_venta t9830
+FROM t9830_pdv_d_movto_venta t9830 WITH (NOLOCK)
 INNER JOIN #table_ventas_generales tvg ON tvg.guid_docto = t9830.f9830_guid_docto
-INNER JOIN t121_mc_items_extensiones t121 ON t121.f121_rowid = t9830.f9830_rowid_item_ext
-INNER JOIN t120_mc_items t120 ON t120.f120_rowid = t121.f121_rowid_item
+INNER JOIN t121_mc_items_extensiones t121 WITH (NOLOCK) ON t121.f121_rowid = t9830.f9830_rowid_item_ext
+INNER JOIN t120_mc_items t120 WITH (NOLOCK) ON t120.f120_rowid = t121.f121_rowid_item
 
 UNION ALL
 
@@ -347,10 +358,10 @@ SELECT
     ,t9930.f9930_cant_base, t9930.f9930_precio_uni, t9930.f9930_vlr_bruto
     ,t9930.f9930_vlr_dscto_linea + t9930.f9930_vlr_dscto_global
     ,t9930.f9930_vlr_imp, t9930.f9930_vlr_neto
-FROM t9930_pdv_a_movto_venta t9930
+FROM t9930_pdv_a_movto_venta t9930 WITH (NOLOCK)
 INNER JOIN #table_ventas_generales tvg ON tvg.guid_docto = t9930.f9930_guid_docto
-INNER JOIN t121_mc_items_extensiones t121 ON t121.f121_rowid = t9930.f9930_rowid_item_ext
-INNER JOIN t120_mc_items t120 ON t120.f120_rowid = t121.f121_rowid_item;
+INNER JOIN t121_mc_items_extensiones t121 WITH (NOLOCK) ON t121.f121_rowid = t9930.f9930_rowid_item_ext
+INNER JOIN t120_mc_items t120 WITH (NOLOCK) ON t120.f120_rowid = t121.f121_rowid_item;
 
 -- =====================================================================
 -- Resultado final en JSON
