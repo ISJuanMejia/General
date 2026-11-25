@@ -26,7 +26,7 @@ BEGIN TRY
 
   DECLARE @unidad_negocio NVARCHAR(10)
 
-  DECLARE @id_item_flete     NVARCHAR(20) = '85' -- Referencia del flete en SIESA
+  DECLARE @id_item_flete     NVARCHAR(20) = '0000001' -- Referencia del flete en SIESA
 
   DECLARE @t430_cm_pv_docto TABLE (
     f430_num_docto_referencia   NVARCHAR(15)
@@ -39,9 +39,7 @@ BEGIN TRY
     f430_id_fecha               NVARCHAR(8),
     f430_id_tercero_fact        NVARCHAR(15),
     f430_id_tercero_rem         NVARCHAR(15),
-    f430_id_tipo_cli_fact       NVARCHAR(4),
     f430_fecha_entrega          NVARCHAR(8),
-    f430_referencia             NVARCHAR(10),
     f430_num_docto_referencia   NVARCHAR(15),
     f430_notas                  NVARCHAR(2000),
     f430_id_tercero_vendedor    NVARCHAR(15)
@@ -127,7 +125,7 @@ BEGIN TRY
 	);
 
   INSERT INTO @ordenes
-  SELECT TOP 25
+  SELECT TOP 20
     id_orden,
     orden_obj
   FROM ordenes
@@ -161,7 +159,7 @@ BEGIN TRY
       );
 
       SET @order  =   JSON_VALUE(@json, '$.name')
-      DECLARE @tags NVARCHAR(MAX) = LOWER(ISNULL(JSON_VALUE(@json,'$.order.tags'), ''));
+      DECLARE @tags NVARCHAR(MAX) = LOWER(ISNULL(JSON_VALUE(@json,'$.tags'), ''));
 
       SET @vendedor   = '';
       SET @unidad_negocio = '';
@@ -195,47 +193,114 @@ BEGIN TRY
       )
       select
         f430_id_fecha               =   @fecha_actual,
-        f430_id_tercero_fact        =   LEFT(isnull(JSON_VALUE(@json, '$.billing_address.company'),JSON_VALUE(@json, '$.customer.default_address.company')), 15),
-        f430_id_tercero_rem         =   LEFT(isnull(JSON_VALUE(@json, '$.billing_address.company'),JSON_VALUE(@json, '$.customer.default_address.company')), 15),
+        f430_id_tercero_fact =
+    CASE
+        WHEN COALESCE(
+                JSON_VALUE(@json, '$.billing_address.company'),
+                JSON_VALUE(@json, '$.customer.default_address.company')
+             ) IS NULL
+          OR PATINDEX('%[^0-9]%',
+                LTRIM(RTRIM(
+                    COALESCE(
+                        JSON_VALUE(@json, '$.billing_address.company'),
+                        JSON_VALUE(@json, '$.customer.default_address.company')
+                    )
+                ))
+             ) > 0
+        THEN '22222222222'
+        ELSE LEFT(
+                COALESCE(
+                    JSON_VALUE(@json, '$.billing_address.company'),
+                    JSON_VALUE(@json, '$.customer.default_address.company')
+                ), 15)
+    END,
+f430_id_tercero_rem =
+    CASE
+        WHEN COALESCE(
+                JSON_VALUE(@json, '$.billing_address.company'),
+                JSON_VALUE(@json, '$.customer.default_address.company')
+             ) IS NULL
+          OR PATINDEX('%[^0-9]%',
+                LTRIM(RTRIM(
+                    COALESCE(
+                        JSON_VALUE(@json, '$.billing_address.company'),
+                        JSON_VALUE(@json, '$.customer.default_address.company')
+                    )
+                ))
+             ) > 0
+        THEN '22222222222'
+        ELSE LEFT(
+                COALESCE(
+                    JSON_VALUE(@json, '$.billing_address.company'),
+                    JSON_VALUE(@json, '$.customer.default_address.company')
+                ), 15)
+    END,
         f430_fecha_entrega          =   @fecha_entrega,
         f430_num_docto_referencia   =   @order,
         f430_notas                  =   @order,
         f430_id_tercero_vendedor    =   @vendedor
 
-      INSERT INTO @line_items
-      (
-        id,
-        price,
-        quantity,
-        sku,
-        discount_amount
-      )
-      SELECT
-        id                      =   JSON_VALUE(LI.value, '$.id'),
-        price                   =   JSON_VALUE(LI.value, '$.price_set.presentment_money.amount'),
-        quantity                =   JSON_VALUE(LI.value, '$.quantity'),
-        sku                     =   JSON_VALUE(LI.value, '$.sku'),
-        discount_amount         =
-          (
-            SELECT
-              amount          =   
-                SUM(
-                  CAST(
-                    JSON_VALUE(DA.value, '$.amount') AS DECIMAL(10,4)
-                  )
-                ) / CAST(
-                  JSON_VALUE(LI.value, '$.quantity') AS INT
+         INSERT INTO @line_items
+        (
+            id,
+            price,
+            quantity,
+            sku,
+            discount_amount
+        )
+        SELECT
+            id          = JSON_VALUE(LI.value, '$.id'),
+            price       = JSON_VALUE(LI.value, '$.price_set.presentment_money.amount'),
+            quantity    = JSON_VALUE(LI.value, '$.quantity'),
+            sku         = JSON_VALUE(LI.value, '$.sku'),
+            -- ✅ ÚNICO CAMBIO: dividir el descuento entre (1 + tasa de IVA) cuando el ítem tiene impuestos
+            discount_amount =
+                (
+                    SELECT
+                        amount = 
+                            SUM(CAST(JSON_VALUE(DA.value, '$.amount') AS DECIMAL(18,4)))
+                            / CAST(JSON_VALUE(LI.value, '$.quantity') AS INT)
+                           
+                    FROM OPENJSON(LI.value, '$.discount_allocations') AS DA
                 )
-            FROM OPENJSON(LI.VALUE, '$.discount_allocations') AS DA
-          )
-      FROM OPENJSON(@json,'$.line_items') AS LI;
+        FROM OPENJSON(@json, '$.line_items') AS LI;
+
+--!Se deja comentado ya que es el que estaba antes para el INSERT INTO @line_items por si el actual no sirve
+    --   INSERT INTO @line_items
+    --   (
+    --     id,
+    --     price,
+    --     quantity,
+    --     sku,
+    --     discount_amount
+    --   )
+    --   SELECT
+    --     id                      =   JSON_VALUE(LI.value, '$.id'),
+    --     price                   =   JSON_VALUE(LI.value, '$.price_set.presentment_money.amount'),
+    --     quantity                =   JSON_VALUE(LI.value, '$.quantity'),
+    --     sku                     =   JSON_VALUE(LI.value, '$.sku'),
+    --     discount_amount         =
+    --       (
+    --         SELECT
+    --           amount          =   
+    --             SUM(
+    --               CAST(
+    --                 JSON_VALUE(DA.value, '$.amount') AS DECIMAL(10,4)
+    --               )
+    --             ) / CAST(
+    --               JSON_VALUE(LI.value, '$.quantity') AS INT
+    --             )
+    --         FROM OPENJSON(LI.VALUE, '$.discount_allocations') AS DA
+    --       )
+    --   FROM OPENJSON(@json,'$.line_items') AS LI;
 
         /*
       SELECT
         quantity                =   JSON_VALUE(LI.value, '$.name'),
         sku                     =   JSON_VALUE(LI.value, '$.sku'),
         @order
-      FROM OPENJSON(@json,'$.line_items') AS LI;*/
+      FROM OPENJSON(@json,'$.line_items') AS LI;*/---------------
+
 
       /*
         * MOVIMIENTO

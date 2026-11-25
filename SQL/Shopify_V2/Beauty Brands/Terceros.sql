@@ -300,11 +300,26 @@ BEGIN TRY
  
         SET @order=JSON_VALUE(@json, '$.name');
  
-        DECLARE @F200_ID                NVARCHAR(40)    =  
-            ISNULL(
+        DECLARE @F200_ID NVARCHAR(40) =  
+    CASE
+        WHEN COALESCE(
                 JSON_VALUE(@json, '$.billing_address.company'),
                 JSON_VALUE(@json, '$.customer.default_address.company')
-            );
+             ) IS NULL
+          OR PATINDEX('%[^0-9]%',
+                LTRIM(RTRIM(
+                    COALESCE(
+                        JSON_VALUE(@json, '$.billing_address.company'),
+                        JSON_VALUE(@json, '$.customer.default_address.company')
+                    )
+                ))
+             ) > 0
+        THEN '22222222222'
+        ELSE COALESCE(
+                JSON_VALUE(@json, '$.billing_address.company'),
+                JSON_VALUE(@json, '$.customer.default_address.company')
+             )
+    END;
         DECLARE @F200_RAZON_SOCIAL      NVARCHAR(100)   =  
             UPPER(
                 ISNULL(
