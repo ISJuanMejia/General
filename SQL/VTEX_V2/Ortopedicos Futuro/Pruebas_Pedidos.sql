@@ -857,7 +857,7 @@ SELECT
                 select 
                                       
 					
-                    convert(varchar(8), getdate(), 112) as f430_id_fecha,
+                    ISNULL(CONVERT(VARCHAR(8), TRY_CAST(COALESCE(JSON_VALUE(orden_obj_origen, '$.lastChange'), JSON_VALUE(orden_obj_destino, '$.lastChange')) AS DATETIMEOFFSET), 112), CONVERT(VARCHAR(8), GETDATE(), 112)) as f430_id_fecha,
                     json_value(orden_obj_origen, '$.clientProfileData.document') as f430_id_tercero_fact,                    
                     json_value(orden_obj_origen, '$.clientProfileData.document') as f430_id_tercero_rem,             
 					CASE 

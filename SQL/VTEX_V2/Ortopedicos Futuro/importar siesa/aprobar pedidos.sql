@@ -8,8 +8,8 @@ BEGIN TRY
        ============================================= */
     DECLARE @id_compania        NVARCHAR(4)     =   '4826',
             @id_sistema         NVARCHAR(1)     =   '2',
-            @id_documento       NVARCHAR(6)     =   '123456',
-            @nombre_documento   NVARCHAR(255)   =   'aprobar_pedido_vtex',
+            @id_documento       NVARCHAR(6)     =   '251143',
+            @nombre_documento   NVARCHAR(255)   =   'Aprobar_Pedido_VTEX',
             @validar_estructura NVARCHAR(5)     =   'true';
         
     DECLARE @endpoint   NVARCHAR(500)   =   'http://localhost:8092/v3.1/ConectoresImportar?idCompania='
@@ -70,6 +70,10 @@ BEGIN TRY
         o.id_estado = 6
         AND (o.intentos <= @num_max_intentos OR o.intentos IS NULL)
         AND ISNULL(o.endpoint, '') <> @endpoint
+        AND COALESCE(
+            TRY_CAST(JSON_VALUE(o.orden_obj_origen, '$.lastChange') AS DATETIMEOFFSET),
+            TRY_CAST(JSON_VALUE(o.orden_obj_destino, '$.lastChange') AS DATETIMEOFFSET)
+        ) >= DATEADD(DAY, -7, SYSDATETIMEOFFSET())
     ORDER BY o.id_orden DESC;
 
     IF @@ROWCOUNT = 0

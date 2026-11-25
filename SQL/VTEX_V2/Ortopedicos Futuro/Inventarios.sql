@@ -101,7 +101,8 @@ INNER JOIN dbo.productos p
     ON p.id_producto_ecommerce = v.id_producto_ecommerce
 WHERE
     p.id_tienda     = 1
-    AND v.sincronizado  = 1;
+    AND v.sincronizado  = 1
+    AND v.sku_erp   = '858167004900';
 
 -- =============================================================================
 -- PASO 2: INVENTARIO CALCULADO DESDE EL ERP
@@ -221,6 +222,8 @@ INNER JOIN @ResultadoFinal source
     AND target.id_bodega_ecommerce   = source.id_bodega_ecommerce
 WHERE
     ISNULL(target.cantidad, 0) <> ISNULL(source.cantidad, 0);
+
+DECLARE @Actualizados INT = @@ROWCOUNT;
 
 -- =============================================================================
 -- PASO 5: INSERT - REGISTROS NUEVOS QUE NO EXISTEN AÚN

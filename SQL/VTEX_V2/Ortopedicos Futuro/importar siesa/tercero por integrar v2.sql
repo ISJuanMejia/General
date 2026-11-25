@@ -225,7 +225,10 @@ BEGIN TRY
         AND 
         ISNULL(endpoint,'') NOT IN (@endpoint_terceros, @endpoint_puntos_envio)
         AND
-        fecha_creacion >= '2026-06-15'
+        COALESCE(
+            TRY_CAST(JSON_VALUE(orden_obj_origen, '$.lastChange') AS DATETIMEOFFSET),
+            TRY_CAST(JSON_VALUE(orden_obj_destino, '$.lastChange') AS DATETIMEOFFSET)
+        ) >= DATEADD(DAY, -7, SYSDATETIMEOFFSET())
     ORDER BY id_orden DESC;  -- Orden para procesamiento consistente
 
     IF @@ROWCOUNT = 0
@@ -350,9 +353,9 @@ BEGIN TRY
                     END
             ELSE    od.email 
         END,
-        nombre              =   UPPER(od.firstName),
-        apellido            =   UPPER(od.lastName),
-        nombre_completo     =   UPPER(CONCAT(od.firstName, ' ', od.lastName)),
+        nombre              =   UPPER(LTRIM(RTRIM(od.firstName))),
+        apellido            =   UPPER(LTRIM(RTRIM(od.lastName))),
+        nombre_completo     =   UPPER(LTRIM(RTRIM(CONCAT(LTRIM(RTRIM(od.firstName)), ' ', LTRIM(RTRIM(od.lastName)))))),
         nombre_empresa      =   UPPER(od.corporateName),
         tipo_documento      =   UPPER(od.documentType),
         telefono            =   REPLACE(REPLACE(od.phone, ' ', ''), '+57', ''),

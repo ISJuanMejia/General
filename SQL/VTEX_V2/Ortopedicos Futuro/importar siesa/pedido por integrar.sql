@@ -60,7 +60,10 @@ BEGIN TRY
         id_estado = 4
         AND (intentos <= @num_max_intentos OR intentos IS NULL)
         AND ISNULL(endpoint, '') != @endpoint
-        AND fecha_creacion >= DATEADD(DAY, -7, GETDATE())
+        AND COALESCE(
+            TRY_CAST(JSON_VALUE(orden_obj_origen, '$.lastChange') AS DATETIMEOFFSET),
+            TRY_CAST(JSON_VALUE(orden_obj_destino, '$.lastChange') AS DATETIMEOFFSET)
+        ) >= DATEADD(DAY, -7, SYSDATETIMEOFFSET())
     ORDER BY id_orden DESC;
 
     IF NOT EXISTS (SELECT 1 FROM @ordenes)
@@ -91,7 +94,8 @@ BEGIN TRY
         neighborhood        NVARCHAR(255),
         postalCode          NVARCHAR(50),
         currencyCode        NVARCHAR(10),
-        paymentSystemName   NVARCHAR(255)
+        paymentSystemName   NVARCHAR(255),
+        fecha_pedido        NVARCHAR(8)
     );
 
     INSERT INTO @order_data
@@ -121,8 +125,49 @@ BEGIN TRY
         UPPER(JSON_VALUE(orden_obj_origen, '$.shippingData.address.neighborhood'))        AS neighborhood,
         UPPER(JSON_VALUE(orden_obj_origen, '$.shippingData.address.postalCode'))          AS postalCode,
         UPPER(JSON_VALUE(orden_obj_origen, '$.storePreferencesData.currencyCode'))        AS currencyCode,
-        UPPER(JSON_VALUE(orden_obj_origen, '$.paymentData.transactions[0].payments[0].paymentSystemName'))                       AS paymentSystemName
+        UPPER(JSON_VALUE(orden_obj_origen, '$.paymentData.transactions[0].payments[0].paymentSystemName'))                       AS paymentSystemName,
+        ISNULL(
+            CONVERT(VARCHAR(8), TRY_CAST(JSON_VALUE(orden_obj_origen, '$.lastChange') AS DATETIMEOFFSET), 112),
+            CONVERT(VARCHAR(8), GETDATE(), 112)
+        )                                                                                 AS fecha_pedido
     FROM @ordenes;
+
+    -- ===========================================================
+    -- SECCIÓN 2.1: VALIDACIÓN DE TERCERO EN ERP
+    -- Si el tercero no existe en Siesa, se devuelve a estado 1
+    -- ===========================================================
+    DECLARE @ordenes_sin_tercero TABLE (id_orden NVARCHAR(50));
+
+    INSERT INTO @ordenes_sin_tercero (id_orden)
+    SELECT od.id_orden
+    FROM @order_data od
+    LEFT JOIN [UnoEE_PruebasProyectosCol].[dbo].[t200_mm_terceros] t200 WITH (NOLOCK)
+        ON t200.f200_id = od.orden_tercero
+    WHERE t200.f200_id IS NULL;
+
+    IF EXISTS (SELECT 1 FROM @ordenes_sin_tercero)
+    BEGIN
+        UPDATE o
+        SET
+            o.id_estado = 1,
+            o.endpoint = NULL,
+            o.orden_obj_destino = NULL,
+            o.intentos = 0,
+            o.fecha_creacion = GETDATE()
+        FROM dbo.ordenes o
+        INNER JOIN @ordenes_sin_tercero ost ON o.id_orden = ost.id_orden;
+
+        DELETE od
+        FROM @order_data od
+        INNER JOIN @ordenes_sin_tercero ost ON od.id_orden = ost.id_orden;
+
+        DELETE o
+        FROM @ordenes o
+        INNER JOIN @ordenes_sin_tercero ost ON o.id_orden = ost.id_orden;
+    END
+
+    IF NOT EXISTS (SELECT 1 FROM @order_data)
+        RETURN;
 
     INSERT INTO @OrdenesDestino (id_orden, endpoint, fecha_creacion, orden_obj_destino)
     SELECT
@@ -135,7 +180,7 @@ BEGIN TRY
                 Pedidos =
                 (
                     SELECT
-                        CONVERT(VARCHAR(8), GETDATE(), 112) AS f430_id_fecha,
+                        od.fecha_pedido                     AS f430_id_fecha,
                         od.orden_tercero                    AS f430_id_tercero_fact,
                         od.orden_tercero                    AS f430_id_tercero_rem,
                         CASE
@@ -151,7 +196,7 @@ BEGIN TRY
                                 THEN N'W006'
                             ELSE N'W003'
                         END                                 AS f430_id_tipo_cli_fact,
-                        CONVERT(VARCHAR(8), GETDATE(), 112) AS f430_fecha_entrega,
+                        od.fecha_pedido                     AS f430_fecha_entrega,
                         CASE
                             WHEN od.paymentSystemName LIKE '%ADDI%'
                                 THEN CONCAT(
@@ -192,7 +237,7 @@ BEGIN TRY
                                     AND
                                     ISNULL(f015_direccion3, '') =   ISNULL(LEFT(od.complement, 40), '')
                             ),
-                            '001'
+                            '000'
                         )                                   AS f430_id_punto_envio,
                         LEFT(
                             CONCAT(
@@ -223,7 +268,7 @@ BEGIN TRY
                             ELSE JSON_VALUE(item.value, '$.ean')
                         END
                             AS f431_codigo_barras,
-                        CONVERT(VARCHAR(8), GETDATE(), 112)
+                        od.fecha_pedido
                             AS f431_fecha_entrega,
                         ISNULL(LTRIM(RTRIM(v121.v121_id_unidad_inventario)), N'UN')
                             AS f431_id_unidad_medida,
@@ -288,16 +333,16 @@ BEGIN TRY
                         CAST(@nro_registro_envio AS VARCHAR(10)) AS f431_nro_registro,
                         @id_item_envio          AS f431_referencia_item,
                         N''                     AS f431_codigo_barras,
-                        CONVERT(VARCHAR(8), GETDATE(), 112)
+                        od.fecha_pedido
                                                 AS f431_fecha_entrega,
                         N'UN'                   AS f431_id_unidad_medida,
                         N'1'                    AS f431_cant_pedida_base,
                         @id_lista_precio        AS f431_id_lista_precio,
-                        ISNULL((
+                        CAST(ISNULL((
                             SELECT CAST(JSON_VALUE(total.value, '$.value') AS BIGINT) / 100
                             FROM OPENJSON(o.orden_obj_origen, '$.totals') AS total
                             WHERE JSON_VALUE(total.value, '$.id') = N'Shipping'
-                        ), 0)                   AS f431_precio_unitario,
+                        ), 0) AS VARCHAR(20))   AS f431_precio_unitario,
                         -- Envío nunca es obsequio → valores normales
                         N'0'                    AS f431_ind_obsequio,
                         N'0'                    AS f431_ind_impto_asumido,
@@ -316,17 +361,17 @@ BEGIN TRY
                 Descuentos =
                 (
                     SELECT
-                        CAST(item.[key] AS INT) + 1
+                        CAST(CAST(item.[key] AS INT) + 1 AS VARCHAR(10))
                             AS f431_nro_registro,
                         CASE
                             WHEN JSON_VALUE(tag.value, '$.value') IS NOT NULL
-                                THEN CAST(
+                                THEN CAST(CAST(
                                         (ABS(TRY_CAST(JSON_VALUE(tag.value, '$.value') AS DECIMAL(18,2))) / 100.0)
                                         / NULLIF(TRY_CAST(JSON_VALUE(item.value, '$.quantity') AS DECIMAL(18,2)), 0)
-                                    AS DECIMAL(18,2))
+                                    AS DECIMAL(18,2)) AS VARCHAR(20))
                             ELSE NULL
                         END AS f432_vlr_uni,
-                        0   AS f432_tasa
+                        N'0' AS f432_tasa
 
                     FROM OPENJSON(o.orden_obj_origen, '$.items') AS item
                     CROSS APPLY OPENJSON(item.value, '$.priceTags') AS tag
@@ -354,7 +399,7 @@ BEGIN TRY
     -- CORRECCIÓN 1: ON faltante en el JOIN
     INNER JOIN @OrdenesDestino AS d ON o.id_orden = d.id_orden;
 
-    SELECT @@ROWCOUNT AS filas_actualizadas, GETDATE() AS fecha_ejecucion;
+    PRINT CONCAT('Batch procesado: ', @@ROWCOUNT, ' órdenes de pedido actualizadas.');
 
 END TRY
 BEGIN CATCH

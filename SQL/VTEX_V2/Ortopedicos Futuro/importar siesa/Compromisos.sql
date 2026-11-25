@@ -72,9 +72,10 @@ BEGIN TRY
         o.id_estado = 7
         AND (o.intentos <= @num_max_intentos OR o.intentos IS NULL)
         AND ISNULL(o.endpoint, '') <> @endpoint
-        /*
-        id_orden = '1651520583072-01'
-        */
+        AND COALESCE(
+            TRY_CAST(JSON_VALUE(o.orden_obj_origen, '$.lastChange') AS DATETIMEOFFSET),
+            TRY_CAST(JSON_VALUE(o.orden_obj_destino, '$.lastChange') AS DATETIMEOFFSET)
+        ) >= DATEADD(DAY, -7, SYSDATETIMEOFFSET())
     ORDER BY o.id_orden DESC;
 
     IF @@ROWCOUNT = 0

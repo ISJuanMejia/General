@@ -10,7 +10,7 @@ DECLARE @id_compania                    NVARCHAR(4)   = '4826',
 
 DECLARE @estado_transferencias           INT = 3,
         @estado_pedido_por_integrar      INT = 4,
-        @batch_size                      INT = 50;
+        @batch_size                      INT = 150;
 
 DECLARE @endpoint_transferencias NVARCHAR(500);
 
@@ -48,8 +48,52 @@ WHERE
 id_estado = @estado_transferencias
  -- id_orden IN ('DDD-1656605315659-01')
   AND ISNULL(intentos, 0) <= 3
-  AND orden_obj_origen IS NOT NULL
+  AND COALESCE(
+        TRY_CAST(JSON_VALUE(orden_obj_origen, '$.lastChange') AS DATETIMEOFFSET),
+        TRY_CAST(JSON_VALUE(orden_obj_destino, '$.lastChange') AS DATETIMEOFFSET)
+      ) >= DATEADD(DAY, -7, SYSDATETIMEOFFSET())
 ORDER BY id_orden;
+
+IF NOT EXISTS (SELECT 1 FROM @ordenes)
+    RETURN;
+
+/* =============================================================
+   2.1 VALIDACIÓN DE TERCERO EN ERP
+   Si el tercero no existe en Siesa, se devuelve a estado 1
+   ============================================================= */
+DECLARE @ordenes_sin_tercero TABLE (id_orden NVARCHAR(50));
+
+INSERT INTO @ordenes_sin_tercero (id_orden)
+SELECT o.id_orden
+FROM @ordenes o
+LEFT JOIN [UnoEE_PruebasProyectosCol].[dbo].[t200_mm_terceros] t200 WITH (NOLOCK)
+    ON t200.f200_id = REPLACE(REPLACE(
+        CASE 
+            WHEN UPPER(JSON_VALUE(o.orden_obj_origen, '$.clientProfileData.isCorporate')) IN ('TRUE', '1') 
+            THEN JSON_VALUE(o.orden_obj_origen, '$.clientProfileData.corporateDocument')
+            ELSE JSON_VALUE(o.orden_obj_origen, '$.clientProfileData.document')
+        END, '.', ''), ' ', '')
+WHERE t200.f200_id IS NULL;
+
+IF EXISTS (SELECT 1 FROM @ordenes_sin_tercero)
+BEGIN
+    UPDATE ord
+    SET
+        ord.id_estado = 1,
+        ord.endpoint = NULL,
+        ord.orden_obj_destino = NULL,
+        ord.intentos = 0,
+        ord.fecha_creacion = GETDATE()
+    FROM dbo.ordenes ord
+    INNER JOIN @ordenes_sin_tercero ost ON ord.id_orden = ost.id_orden;
+
+    DELETE o
+    FROM @ordenes o
+    INNER JOIN @ordenes_sin_tercero ost ON o.id_orden = ost.id_orden;
+END
+
+IF NOT EXISTS (SELECT 1 FROM @ordenes)
+    RETURN;
 
 
 
