@@ -126,6 +126,10 @@ BEGIN TRY
 		f430_referencia	NVARCHAR(10)
 	);
 
+	DECLARE @festivos_ERP TABLE (
+		f053_fecha	DATE PRIMARY KEY
+	);
+
 	INSERT INTO @t121_mc_items_extensiones
 	EXEC('
 		SELECT
@@ -178,6 +182,21 @@ BEGIN TRY
 			''
 		)'
 	);
+
+	INSERT INTO @festivos_ERP (f053_fecha)
+	EXEC('
+		SELECT CAST(f053_id AS DATE)
+		FROM OPENROWSET(
+			''SQLNCLI'',
+			''' + @conexion + ''',
+			''
+				SELECT f053_id
+				FROM ' + @base_datos + '.dbo.t053_mm_fechas
+				WHERE f053_id_cia = 1
+				  AND f053_ind_festivo = 1
+			''
+		)
+	');
 
 	/*
         *   Valida si el precio del ecommerce es diferente al del erp y si lo es lo toma como un descuento
@@ -419,12 +438,37 @@ BEGIN TRY
 					)
 				);
 
+			/*	CÁLCULO SIGUIENTE DÍA HÁBIL (OMITIENDO FINES DE SEMANA Y FESTIVOS ERP)	*/
+			DECLARE @fecha_pedido DATE = CAST(GETDATE() AS DATE);
+			DECLARE @fecha_entrega DATE;
+			DECLARE @num_dias_entrega INT;
+
+			SELECT TOP 1 
+				@fecha_entrega = c.fecha_candidata,
+				@num_dias_entrega = DATEDIFF(DAY, @fecha_pedido, c.fecha_candidata)
+			FROM (
+				SELECT DATEADD(DAY, n.v, @fecha_pedido) AS fecha_candidata
+				FROM (VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11),(12),(13),(14),(15)) AS n(v)
+			) AS c
+			WHERE 
+				-- Excluir Sábados y Domingos (independiente de @@DATEFIRST)
+				((DATEPART(dw, c.fecha_candidata) + @@DATEFIRST - 2) % 7) + 1 NOT IN (6, 7)
+				-- Excluir Festivos configurados en el ERP (t053_mm_fechas)
+				AND NOT EXISTS (
+					SELECT 1 FROM @festivos_ERP f WHERE f.f053_fecha = c.fecha_candidata
+				)
+			ORDER BY c.fecha_candidata ASC;
+
+			DECLARE @fecha_pedido_str VARCHAR(8) = FORMAT(@fecha_pedido, 'yyyyMMdd');
+			DECLARE @fecha_entrega_str VARCHAR(8) = FORMAT(@fecha_entrega, 'yyyyMMdd');
+			DECLARE @num_dias_entrega_str VARCHAR(10) = CAST(@num_dias_entrega AS VARCHAR(10));
+
 			-->	encabezado
 			INSERT INTO @pedidos
 			SELECT
-				f430_id_fecha				=	FORMAT(GETDATE(), 'yyyyMMdd'),
-				f430_fecha_entrega			=	FORMAT(GETDATE(), 'yyyyMMdd'),
-				f430_num_dias_entrega		=	'1',
+				f430_id_fecha				=	@fecha_pedido_str,
+				f430_fecha_entrega			=	@fecha_entrega_str,
+				f430_num_dias_entrega		=	@num_dias_entrega_str,
 				f430_referencia				=	JSON_VALUE(@json, '$.name'),
 				f430_num_docto_referencia	=	JSON_VALUE(@json, '$.name'),
 				f430_notas					=	
@@ -498,8 +542,8 @@ BEGIN TRY
 						WHEN @TomarCodigoBarras = 2	
 							THEN CAST('' AS VARCHAR(20))
 					END,
-				f431_fecha_entrega		=	FORMAT(GETDATE(), 'yyyyMMdd'),
-				f431_num_dias_entrega	=	1,
+				f431_fecha_entrega		=	@fecha_entrega_str,
+				f431_num_dias_entrega	=	@num_dias_entrega,
 				f431_cant_pedida_base	=	JSON_VALUE(LineItems.value, '$.quantity'),
 				f431_id_lista_precio	=	@IdListaPreciosProducto,
 				f431_id_bodega			=	bodega_erp,
@@ -784,8 +828,8 @@ BEGIN TRY
 					f431_ind_precio			=	@IndPrecioFlete,
 					f431_referencia_item	=	@ReferenciaItemFlete,
 					f431_codigo_barras		=	CAST('' AS VARCHAR(20)),
-					f431_fecha_entrega		=	FORMAT(GETDATE(), 'yyyyMMdd'),
-					f431_num_dias_entrega	=	1,
+					f431_fecha_entrega		=	@fecha_entrega_str,
+					f431_num_dias_entrega	=	@num_dias_entrega,
 					f431_cant_pedida_base	=	1,
 					f431_id_lista_precio	=	@IdListaPreciosFlete,
 					f431_id_bodega			=	@IdBodega,
