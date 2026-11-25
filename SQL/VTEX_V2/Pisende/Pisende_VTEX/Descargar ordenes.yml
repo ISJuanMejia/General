@@ -1,0 +1,39 @@
+info:
+  name: Descargar ordenes
+  type: http
+
+http:
+  method: GET
+  url: https://pisende.myvtex.com/api/oms/pvt/orders/?orderBy=creationDate,desc&per_page=100&page=30&f_status=ready-for-handling&f_creationDate=creationDate%3A%5B2026-11-10T02%3A00%3A00.000Z%20TO%202026-11-17T01%3A59%3A59.999Z%5D
+  headers:
+    - name: X-VTEX-API-AppKey
+      value: vtexappkey-pisende-jyzbte
+    - name: X-VTEX-API-AppToken
+      value: CHCRBGBEYZRJXWGLGBLXGKSCLOEPYZLPHMMODRQMGPGHQVKGJKHQSVKOZREVMSETBKZHSJMQLHMAAHDDETJRMANIPQOYWLTJWEELLJFZMOQHOPKIPKVVGHHCHDFSPYRN
+    - name: Accept
+      value: application/json
+    - name: Content-Type
+      value: application/json
+  params:
+    - name: orderBy
+      value: creationDate,desc
+      type: query
+    - name: per_page
+      value: "100"
+      type: query
+    - name: page
+      value: "30"
+      type: query
+    - name: f_status
+      value: ready-for-handling
+      type: query
+    - name: f_creationDate
+      value: creationDate%3A%5B2026-11-10T02%3A00%3A00.000Z%20TO%202026-11-17T01%3A59%3A59.999Z%5D
+      type: query
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
