@@ -82,11 +82,11 @@ EXEC
     *   Actualizar a estado 5 pedidos ya facturados en ERP
 */
 UPDATE ord
-    SET id_estado	=	5
+    SET id_estado	=	5,
+        intentos    =   0
 FROM [shopify-colombia-parchita].dbo.ordenes AS ord
     INNER JOIN @t430_cm_pv_docto
         ON f430_referencia     =   id_orden
-       AND f430_ind_estado     =   4
        AND f430_ind_facturado  =   1
 WHERE id_estado = 4;
 

@@ -156,7 +156,42 @@ BEGIN TRY
     ');
 
     /*
-        *   Actualizar órdenes en estado 3 según estado real en ERP
+        *   Obtener detalle de cantidades comprometidas en ERP por pedido
+    */
+    DECLARE @compromisos_erp TABLE (
+        f430_referencia         NVARCHAR(50),
+        total_pedidas           DECIMAL(18,2),
+        total_comprometidas     DECIMAL(18,2)
+    );
+
+    INSERT INTO @compromisos_erp (f430_referencia, total_pedidas, total_comprometidas)
+    EXEC('
+        SELECT 
+            f430_referencia,
+            SUM(f431_cant1_pedida) AS total_pedidas,
+            SUM(f431_cant1_comprometida) AS total_comprometidas
+        FROM OPENROWSET(
+            ''SQLNCLI'',
+            ''' + @conexion + ''',
+            ''
+                SELECT 
+                    d.f430_referencia,
+                    m.f431_cant1_pedida,
+                    m.f431_cant1_comprometida
+                FROM ' + @base_datos + '.dbo.t430_cm_pv_docto d
+                INNER JOIN ' + @base_datos + '.dbo.t431_cm_pv_movto m
+                    ON m.f431_rowid_pv_docto = d.f430_rowid
+                WHERE d.f430_id_cia = 1
+                  AND d.f430_referencia IS NOT NULL
+            ''
+        )
+        GROUP BY f430_referencia
+    ');
+
+/*
+    /*
+        *   Actualizar órdenes en estado 3 según estado real y compromisos en ERP:
+        *   Si ya tiene ítems comprometidos (parcial o totalmente) o estado es 3/facturado, pasa a estado 4
     */
     UPDATE ord
     SET 
@@ -164,12 +199,16 @@ BEGIN TRY
         id_estado = CASE
                         WHEN pac.f430_referencia IS NULL AND intentos + 1 > @max_intentos THEN 99
                         WHEN pac.f430_referencia IS NULL THEN 2
-                        WHEN pac.f430_ind_estado = 3 OR pac.f430_ind_facturado = 1 THEN 4
+                        WHEN pac.f430_ind_estado IN (2, 3) 
+                          OR pac.f430_ind_facturado = 1 
+                          OR ISNULL(comp.total_comprometidas, 0) > 0 THEN 4
                         ELSE 3
                     END
     FROM [shopify-colombia-parchita].dbo.ordenes AS ord
         LEFT JOIN @t430_cm_pv_docto_2 AS pac ON ord.id_orden = pac.f430_referencia
+        LEFT JOIN @compromisos_erp AS comp ON ord.id_orden = comp.f430_referencia
     WHERE ord.id_estado = 3;
+*/
 
     /*
         *   Generar JSON de compromisos limitando a 25 órdenes por lote, ordenadas por ID DESC

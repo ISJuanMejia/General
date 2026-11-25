@@ -171,12 +171,15 @@ BEGIN TRY
     /*
         *   Actualizar a estado 3 pedidos ya existentes en ERP
     */
+	/*
 	UPDATE ord
-    SET id_estado	=	3
+    SET id_estado	=	3,
+        intentos    =   0
     FROM [shopify-colombia-parchita].dbo.ordenes AS ord
         INNER JOIN @t430_cm_pv_docto
             ON f430_referencia = id_orden
     WHERE id_estado = 2;
+	*/
 
 	DECLARE @ordenes TABLE (
 		id_seq      INT IDENTITY(1,1) PRIMARY KEY,
@@ -186,7 +189,7 @@ BEGIN TRY
 
 	/*
 		*	Obtener máximo 25 órdenes pendientes en estado 2, no mayores a 30 días,
-		*	excluyendo órdenes POS y ordenando por ID DESC.
+		*	excluyendo las que ya existen en el ERP y ordenando por ID DESC.
 	*/
 	INSERT INTO @ordenes (id_orden, orden_obj)
 	SELECT TOP (@batch_size)
@@ -529,8 +532,7 @@ BEGIN TRY
             -- Incrementa número de intentos y marca estado 99 si supera max_intentos para evitar bloqueos infinitos
             UPDATE [shopify-colombia-parchita].dbo.ordenes
             SET 
-				intentos	=	intentos + 1,
-				id_estado   =   CASE WHEN intentos + 1 > @max_intentos THEN 99 ELSE id_estado END
+				intentos	=	intentos + 1
             WHERE
                 id_orden	=	@order
 				AND id_estado = 2;

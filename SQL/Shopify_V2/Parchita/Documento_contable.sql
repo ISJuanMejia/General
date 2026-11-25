@@ -100,12 +100,14 @@ BEGIN TRY
     Paso 2 - Actualización de estado de órdenes sin transacciones gift_card exitosas o que superan intentos
     ================================================================================================================
     */
+    /*
     UPDATE o
     SET o.id_estado = 6
     FROM ordenes o
     INNER JOIN @orders_with_successful_transaction owst
         ON o.id_orden = owst.id_orden
     WHERE owst.amount IS NULL;
+    */
 
     /*
     ================================================================================================================

@@ -295,12 +295,12 @@ BEGIN TRY
 			BEGIN
 				UPDATE [shopify-colombia-parchita].dbo.ordenes
 				SET 
-					intentos	=	CASE WHEN @process_client_without_id = 0 THEN intentos + 1 ELSE 0 END,
-					id_estado	=	CASE 
-										WHEN @process_client_without_id = 1 THEN 2 
-										WHEN intentos + 1 > @max_intentos THEN 99 
-										ELSE id_estado 
-									END
+					intentos	=	CASE WHEN @process_client_without_id = 0 THEN intentos + 1 ELSE 0 END--,
+					-- id_estado	=	CASE 
+					-- 					WHEN @process_client_without_id = 1 THEN 2 
+					-- 					WHEN intentos + 1 > @max_intentos THEN 99 
+					-- 					ELSE id_estado 
+					-- 				END
 				WHERE id_orden = @order AND id_estado = 1;
 
 				SET @counter = @counter + 1;
@@ -466,8 +466,8 @@ BEGIN TRY
 			-- Incrementa número de intentos y marca estado 99 si supera max_intentos para evitar bloqueos infinitos
 			UPDATE [shopify-colombia-parchita].dbo.ordenes
 			SET 
-				intentos	=	intentos + 1,
-				id_estado   =   CASE WHEN intentos + 1 > @max_intentos THEN 99 ELSE id_estado END
+				intentos	=	intentos + 1--,
+				-- id_estado   =   CASE WHEN intentos + 1 > @max_intentos THEN 99 ELSE id_estado END
 			WHERE 
 				id_orden	=	@order
 				AND id_estado = 1;
