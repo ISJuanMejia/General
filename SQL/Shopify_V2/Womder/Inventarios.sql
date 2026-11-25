@@ -1,30 +1,31 @@
 DECLARE @json           NVARCHAR(MAX);
-DECLARE @conexion       VARCHAR(200)
+DECLARE @conexion       VARCHAR(200);
 DECLARE @listaBodegas   NVARCHAR(MAX);
 DECLARE @sql            NVARCHAR(MAX);
 
-DECLARE @t120_mc_items  TABLE
+DECLARE @t120_mc_items TABLE
 (
-    f120_rowid  INT,
+    f120_rowid  INT PRIMARY KEY,
     f120_id     NVARCHAR(255)
-)
+);
 
 DECLARE @t121_mc_items_extensiones TABLE
 (
-    f121_rowid              INT,
+    f121_rowid              INT PRIMARY KEY,
     f121_rowid_item         INT,
     f121_id_ext1_detalle    NVARCHAR(255),
-    f121_id_ext2_detalle    NVARCHAR(255)
+    f121_id_ext2_detalle    NVARCHAR(255),
+    INDEX IX_t121_item (f121_rowid_item)
 );
 
 DECLARE @t125_mc_items_criterios TABLE
 (
-    f125_rowid_item         INT
+    f125_rowid_item         INT PRIMARY KEY
 );
 
 DECLARE @t150_mc_bodegas TABLE
 (
-    f150_rowid  INT,
+    f150_rowid  INT PRIMARY KEY,
     f150_id     VARCHAR(10),
     f150_id_cia INT
 );
@@ -36,35 +37,34 @@ DECLARE @t400_cm_existencia TABLE
     f400_cant_pos_1             DECIMAL(18,6),
     f400_rowid_item_ext         INT,
     f400_rowid_bodega           INT,
-    f400_id_cia                 INT
+    f400_id_cia                 INT,
+    INDEX IX_t400_item_bodega (f400_rowid_item_ext, f400_rowid_bodega)
 );
 
 BEGIN TRY
     SELECT TOP 1 
         @conexion   =   cadena_conexion 
-    FROM    conexiones
+    FROM conexiones;
 
     DECLARE @bodegas TABLE
     (
         id_location BIGINT,
         bodega_erp VARCHAR(6)
-    )
+    );
 
     INSERT INTO @bodegas
     SELECT
         id_location,
         bodega_erp
     FROM bodegas
-    where bodega_erp IS NOT NULL;
+    WHERE bodega_erp IS NOT NULL;
 
     IF NOT EXISTS(
-        SELECT
-            id_location
-        FROM @bodegas
+        SELECT id_location FROM @bodegas
     )
     BEGIN
-        SELECT 'No hay bodegas configuradas.'
-        RETURN
+        SELECT 'No hay bodegas configuradas.';
+        RETURN;
     END
 
     SELECT
@@ -86,7 +86,7 @@ BEGIN TRY
                 FROM t120_mc_items
             ''
         )
-    ')
+    ');
 
     INSERT INTO @t121_mc_items_extensiones
     EXEC('
@@ -128,7 +128,7 @@ BEGIN TRY
                     f125_id_criterio_mayor = ''''01''''
             ''
         )
-    ')
+    ');
 
     INSERT INTO @t150_mc_bodegas
     EXEC('
@@ -184,69 +184,38 @@ BEGIN TRY
     (
         cantidad    DECIMAL(18,6),
         barcode     VARCHAR(200),
-        bodega      VARCHAR(10)
+        bodega      VARCHAR(10),
+        INDEX IX_inv_barcode_bodega (barcode, bodega)
     );
 
     INSERT INTO @inventarios
     SELECT DISTINCT
-        cantidad    =
-            CONVERT(
-                INT,
-                CASE 
-                    WHEN
-                        FORMAT(
-                            (
-                                f400_cant_existencia_1 - (
-                                    f400_cant_comprometida_1 + f400_cant_pos_1
-                                )
-                            ), 
-                            '####'
-                        ) IS NULL 
-                            THEN 0
-                    ELSE
-                        FORMAT(
-                            (
-                                f400_cant_existencia_1 - (
-                                    f400_cant_comprometida_1 + f400_cant_pos_1
-                                )
-                            ), 
-                            '####'
-                        ) 
-                END
-            ),
-        barcode =   f120_id + 
-                    CASE 
-                        WHEN f121_id_ext1_detalle IS NOT NULL 
-                            THEN '-' + f121_id_ext1_detalle 
-                        ELSE '' 
-                    END + 
-                    CASE 
-                        WHEN f121_id_ext2_detalle IS NOT NULL 
-                            THEN '-' + f121_id_ext2_detalle 
-                        ELSE '' 
-                    END,
-        bodega  =   f150_id
+        cantidad = ISNULL(CONVERT(INT, f400_cant_existencia_1 - (f400_cant_comprometida_1 + f400_cant_pos_1)), 0),
+        barcode  = CONVERT(VARCHAR(50), f120_id) + 
+                   CASE 
+                       WHEN f121_id_ext1_detalle IS NOT NULL 
+                           THEN '-' + f121_id_ext1_detalle 
+                       ELSE '-0' 
+                   END + 
+                   CASE 
+                       WHEN f121_id_ext2_detalle IS NOT NULL 
+                           THEN '-' + f121_id_ext2_detalle 
+                       ELSE '-0' 
+                   END,
+        bodega   = f150_id
     FROM @t120_mc_items
         INNER JOIN @t121_mc_items_extensiones
-            ON
-                f120_rowid = f121_rowid_item
+            ON f120_rowid = f121_rowid_item
         INNER JOIN @t125_mc_items_criterios
-            ON
-                f125_rowid_item = f120_rowid
+            ON f125_rowid_item = f120_rowid
         LEFT JOIN @t400_cm_existencia
-            ON
-                f121_rowid  =   f400_rowid_item_ext
+            ON f121_rowid  = f400_rowid_item_ext
         LEFT JOIN @t150_mc_bodegas
-            ON
-                f400_rowid_item_ext = f121_rowid 
-                AND 
-                (
-                    f150_rowid  = f400_rowid_bodega
-                )
+            ON f400_rowid_item_ext = f121_rowid 
+            AND f150_rowid = f400_rowid_bodega
     WHERE
         f150_id IS NOT NULL
-        AND
-        f120_id IS NOT NULL;
+        AND f120_id IS NOT NULL;
 
     DECLARE @inventarios_siesa_shopify TABLE
     (
@@ -254,45 +223,49 @@ BEGIN TRY
         barcode             VARCHAR(200),
         cantidad            INT,
         id_location         BIGINT,
-        bodega              VARCHAR(10)
+        bodega              VARCHAR(10),
+        PRIMARY KEY (inventory_item_id, bodega)
     );
 
     INSERT INTO @inventarios_siesa_shopify
-    SELECT
+    (
         inventory_item_id,
         barcode,
-        cantidad    =   SUM(cantidad),
+        cantidad,
         id_location,
         bodega
-    FROM (
-        SELECT
-            inventory_item_id,
-            barcode = sku,
-            cantidad = ISNULL(CONVERT(INT, cantidad), 0),
-            b.id_location,
-            bodega = ISNULL(
-                b.bodega_erp, 
-                (
-                    SELECT TOP 1 
-                        bodega_erp 
-                    FROM @bodegas
-                )
-            )
-        FROM inventario_bodega_ecommerce i
-            LEFT JOIN @bodegas b 
-                ON i.id_location = b.id_location
-            LEFT JOIN @inventarios iss 
-                ON i.sku = iss.barcode
-        WHERE
-            inventory_item_id IS NOT NULL
-            AND 
-            b.id_location IS NOT NULL
-    ) base
+    )
+    SELECT
+        j.inv_item_id,
+        v.sku_erp,
+        SUM(ISNULL(CONVERT(INT, iss.cantidad), 0)),
+        b.id_location,
+        b.bodega_erp
+    FROM variantes v
+        CROSS JOIN @bodegas b
+        CROSS APPLY (
+            SELECT TRY_CAST(JSON_VALUE(v.variante_obj, '$.inventory_item_id') AS BIGINT) AS inv_item_id
+        ) j
+        LEFT JOIN @inventarios iss 
+            ON v.sku_erp = iss.barcode
+            AND b.bodega_erp = iss.bodega
+    WHERE
+        v.sku_erp IS NOT NULL
+        AND j.inv_item_id IS NOT NULL
+        AND b.id_location IS NOT NULL
     GROUP BY
-        inventory_item_id,
-        barcode,
-        id_location,
-        bodega;
+        j.inv_item_id,
+        v.sku_erp,
+        b.id_location,
+        b.bodega_erp;
+
+    DELETE inv
+    FROM dbo.inventarios inv
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM @inventarios_siesa_shopify src
+        WHERE src.inventory_item_id = TRY_CAST(JSON_VALUE(inv.inventario_obj, '$.inventory_item_id') AS BIGINT)
+    );
 
     MERGE INTO dbo.inventarios AS TARGET
     USING @inventarios_siesa_shopify AS source
@@ -301,7 +274,7 @@ BEGIN TRY
             AND
             target.bodega   =   source.bodega
             AND
-            JSON_VALUE(target.inventario_obj, '$.inventory_item_id')    =   source.inventory_item_id
+            TRY_CAST(JSON_VALUE(target.inventario_obj, '$.inventory_item_id') AS BIGINT) = source.inventory_item_id
         WHEN
             MATCHED
             AND
@@ -310,7 +283,7 @@ BEGIN TRY
                 UPDATE SET
                     target.sincronizado = 0,
                     target.fecha_sincronizacion = null,
-                    target.inventario_obj=
+                    target.inventario_obj =
                         (
                             json_query(
                                 (
@@ -354,5 +327,5 @@ BEGIN TRY
                     );
 END TRY
 BEGIN CATCH
-    SELECT ERROR_MESSAGE() 'Error'
-END CATCH
+    SELECT ERROR_MESSAGE() 'Error';
+END CATCH;

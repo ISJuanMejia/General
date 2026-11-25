@@ -349,104 +349,110 @@ BEGIN TRY
     --  SECCIÓN 6: GENERACIÓN DEL JSON DE PRODUCTOS PARA SHOPIFY
     -- ============================================================
 
-    SELECT
-        ProductJSON = JSON_QUERY(
-            (
-                SELECT
-                    -- Campos del producto
-                    [product.title]     = t120.f120_descripcion,
-                    [product.body_html] = t120.f120_descripcion,
-                    [product.vendor]    = @product_vendor,
-                    [product.status]    = @productDefaultStatus,
+    IF EXISTS (SELECT 1 FROM @productos_elegibles)
+    BEGIN
+        SELECT TOP 100
+            ProductJSON = JSON_QUERY(
+                (
+                    SELECT
+                        -- Campos del producto
+                        [product.title]     = t120.f120_descripcion,
+                        [product.body_html] = t120.f120_descripcion,
+                        [product.vendor]    = @product_vendor,
+                        [product.status]    = @productDefaultStatus,
 
-                    -- Variantes: una por cada combinación ext1 + ext2 no existente en Shopify
-                    [product.variants]  = (
-                        SELECT DISTINCT
-                            [option1]   = TRIM(t117.f117_id),
-                            [option2]   = t119.f119_descripcion,
-                            -- Precio: registro más reciente; TOP 1 garantiza escalar único
-                            [price]     = (
-                                SELECT TOP 1
-                                    p.f126_precio
-                                FROM @t126_mc_items_precios AS p
-                                WHERE (
-                                    p.f126_rowid_item     = CAST(t120.f120_rowid AS VARCHAR(10))
-                                    OR
-                                    p.f126_rowid_item_ext = CAST(t121v.f121_rowid AS VARCHAR(10))
-                                )
-                                ORDER BY p.f126_fecha_ts_actualizacion DESC
-                            ),
-                            -- SKU completo de la variante: ITEM-EXT1-EXT2
-                            [sku]       = t120.f120_id
-                                            + CASE WHEN t121v.f121_id_ext1_detalle IS NOT NULL THEN '-' + t121v.f121_id_ext1_detalle ELSE '' END
-                                            + CASE WHEN t121v.f121_id_ext2_detalle IS NOT NULL THEN '-' + t121v.f121_id_ext2_detalle ELSE '' END,
-                            [barcode]   = t120.f120_id,
-                            [inventory_management] = @InventoryManagement
-                        FROM @t121_mc_items_extensiones AS t121v
-                            INNER JOIN @t117_mc_extensiones1_detalle AS t117 ON t117.f117_id = t121v.f121_id_ext1_detalle
-                            INNER JOIN @t119_mc_extensiones2_detalle AS t119 ON t119.f119_id = t121v.f121_id_ext2_detalle
-                            -- Confirmación adicional: esta variante específica no existe
-                            LEFT  JOIN variantes AS v
-                                ON v.sku_erp = t120.f120_id
-                                    + CASE WHEN t121v.f121_id_ext1_detalle IS NOT NULL THEN '-' + t121v.f121_id_ext1_detalle ELSE '' END
-                                    + CASE WHEN t121v.f121_id_ext2_detalle IS NOT NULL THEN '-' + t121v.f121_id_ext2_detalle ELSE '' END
-                                    OR
-                                    v.sku_erp LIKE '%'+t120.f120_id+'%'
-                        WHERE
-                            t121v.f121_rowid_item = t120.f120_rowid
-                            AND v.sku_erp IS NULL
-                        FOR JSON PATH
-                    ),
-
-                    -- Opciones agrupadas (para el objeto product.options de Shopify)
-                    [product.options]   = (
-                        SELECT
-                            [name],
-                            JSON_QUERY('[' + STRING_AGG('"' + STRING_ESCAPE([values], 'json') + '"', ',') + ']') AS [values],
-                            position
-                        FROM (
-                            -- Opción 1: valores únicos de ext1 para este producto
+                        -- Variantes: una por cada combinación ext1 + ext2 no existente en Shopify
+                        [product.variants]  = (
                             SELECT DISTINCT
-                                [name]      =   @tipo_extension_1,
-                                [values]    =   TRIM(t117.f117_id),
-                                [position]  =   1
-                            FROM @t121_mc_items_extensiones AS t121e1
-                                INNER JOIN @t117_mc_extensiones1_detalle AS t117 ON t117.f117_id = t121e1.f121_id_ext1_detalle
-                                INNER JOIN @t119_mc_extensiones2_detalle AS t119 ON t119.f119_id = t121e1.f121_id_ext2_detalle
+                                [option1]   = TRIM(t117.f117_id),
+                                [option2]   = t119.f119_descripcion,
+                                -- Precio: registro más reciente; TOP 1 garantiza escalar único
+                                [price]     = (
+                                    SELECT TOP 1
+                                        p.f126_precio
+                                    FROM @t126_mc_items_precios AS p
+                                    WHERE (
+                                        p.f126_rowid_item     = CAST(t120.f120_rowid AS VARCHAR(10))
+                                        OR
+                                        p.f126_rowid_item_ext = CAST(t121v.f121_rowid AS VARCHAR(10))
+                                    )
+                                    ORDER BY p.f126_fecha_ts_actualizacion DESC
+                                ),
+                                -- SKU completo de la variante: ITEM-EXT1-EXT2
+                                [sku]       = t120.f120_id
+                                                + CASE WHEN t121v.f121_id_ext1_detalle IS NOT NULL THEN '-' + t121v.f121_id_ext1_detalle ELSE '' END
+                                                + CASE WHEN t121v.f121_id_ext2_detalle IS NOT NULL THEN '-' + t121v.f121_id_ext2_detalle ELSE '' END,
+                                [barcode]   = t120.f120_id,
+                                [inventory_management] = @InventoryManagement
+                            FROM @t121_mc_items_extensiones AS t121v
+                                INNER JOIN @t117_mc_extensiones1_detalle AS t117 ON t117.f117_id = t121v.f121_id_ext1_detalle
+                                INNER JOIN @t119_mc_extensiones2_detalle AS t119 ON t119.f119_id = t121v.f121_id_ext2_detalle
+                                -- Confirmación adicional: esta variante específica no existe
                                 LEFT  JOIN variantes AS v
                                     ON v.sku_erp = t120.f120_id
-                                        + CASE WHEN t121e1.f121_id_ext1_detalle IS NOT NULL THEN '-' + t121e1.f121_id_ext1_detalle ELSE '' END
-                                        + CASE WHEN t121e1.f121_id_ext2_detalle IS NOT NULL THEN '-' + t121e1.f121_id_ext2_detalle ELSE '' END
+                                        + CASE WHEN t121v.f121_id_ext1_detalle IS NOT NULL THEN '-' + t121v.f121_id_ext1_detalle ELSE '' END
+                                        + CASE WHEN t121v.f121_id_ext2_detalle IS NOT NULL THEN '-' + t121v.f121_id_ext2_detalle ELSE '' END
                                         OR
                                         v.sku_erp LIKE '%'+t120.f120_id+'%'
-                            WHERE t121e1.f121_rowid_item = t120.f120_rowid AND v.sku_erp IS NULL
+                            WHERE
+                                t121v.f121_rowid_item = t120.f120_rowid
+                                AND v.sku_erp IS NULL
+                            FOR JSON PATH
+                        ),
 
-                            UNION ALL
+                        -- Opciones agrupadas (para el objeto product.options de Shopify)
+                        [product.options]   = (
+                            SELECT
+                                [name],
+                                JSON_QUERY('[' + STRING_AGG('"' + STRING_ESCAPE([values], 'json') + '"', ',') + ']') AS [values],
+                                position
+                            FROM (
+                                -- Opción 1: valores únicos de ext1 para este producto
+                                SELECT DISTINCT
+                                    [name]      =   @tipo_extension_1,
+                                    [values]    =   TRIM(t117.f117_id),
+                                    [position]  =   1
+                                FROM @t121_mc_items_extensiones AS t121e1
+                                    INNER JOIN @t117_mc_extensiones1_detalle AS t117 ON t117.f117_id = t121e1.f121_id_ext1_detalle
+                                    INNER JOIN @t119_mc_extensiones2_detalle AS t119 ON t119.f119_id = t121e1.f121_id_ext2_detalle
+                                    LEFT  JOIN variantes AS v
+                                        ON v.sku_erp = t120.f120_id
+                                            + CASE WHEN t121e1.f121_id_ext1_detalle IS NOT NULL THEN '-' + t121e1.f121_id_ext1_detalle ELSE '' END
+                                            + CASE WHEN t121e1.f121_id_ext2_detalle IS NOT NULL THEN '-' + t121e1.f121_id_ext2_detalle ELSE '' END
+                                            OR
+                                            v.sku_erp LIKE '%'+t120.f120_id+'%'
+                                WHERE t121e1.f121_rowid_item = t120.f120_rowid AND v.sku_erp IS NULL
 
-                            -- Opción 2: valores únicos de ext2 para este producto
-                            SELECT DISTINCT
-                                [name]      =   @tipo_extension_2,
-                                [values]    =   t119.f119_descripcion,
-                                [position]  =   2
-                            FROM @t121_mc_items_extensiones AS t121e2
-                                INNER JOIN @t117_mc_extensiones1_detalle AS t117 ON t117.f117_id = t121e2.f121_id_ext1_detalle
-                                INNER JOIN @t119_mc_extensiones2_detalle AS t119 ON t119.f119_id = t121e2.f121_id_ext2_detalle
-                                LEFT  JOIN variantes AS v
-                                    ON v.sku_erp = t120.f120_id
-                                        + CASE WHEN t121e2.f121_id_ext1_detalle IS NOT NULL THEN '-' + t121e2.f121_id_ext1_detalle ELSE '' END
-                                        + CASE WHEN t121e2.f121_id_ext2_detalle IS NOT NULL THEN '-' + t121e2.f121_id_ext2_detalle ELSE '' END
-                                        OR
-                                        v.sku_erp LIKE '%'+t120.f120_id+'%'
-                            WHERE t121e2.f121_rowid_item = t120.f120_rowid AND v.sku_erp IS NULL
-                        ) AS options_union
-                        GROUP BY [name], [position]
-                        FOR JSON PATH
-                    )
+                                UNION ALL
 
-                FOR JSON PATH
+                                -- Opción 2: valores únicos de ext2 para este producto
+                                SELECT DISTINCT
+                                    [name]      =   @tipo_extension_2,
+                                    [values]    =   t119.f119_descripcion,
+                                    [position]  =   2
+                                FROM @t121_mc_items_extensiones AS t121e2
+                                    INNER JOIN @t117_mc_extensiones1_detalle AS t117 ON t117.f117_id = t121e2.f121_id_ext1_detalle
+                                    INNER JOIN @t119_mc_extensiones2_detalle AS t119 ON t119.f119_id = t121e2.f121_id_ext2_detalle
+                                    LEFT  JOIN variantes AS v
+                                        ON v.sku_erp = t120.f120_id
+                                            + CASE WHEN t121e2.f121_id_ext1_detalle IS NOT NULL THEN '-' + t121e2.f121_id_ext1_detalle ELSE '' END
+                                            + CASE WHEN t121e2.f121_id_ext2_detalle IS NOT NULL THEN '-' + t121e2.f121_id_ext2_detalle ELSE '' END
+                                            OR
+                                            v.sku_erp LIKE '%'+t120.f120_id+'%'
+                                WHERE t121e2.f121_rowid_item = t120.f120_rowid AND v.sku_erp IS NULL
+                            ) AS options_union
+                            GROUP BY [name], [position]
+                            FOR JSON PATH
+                        )
+                    FROM @productos_elegibles AS t120
+                    FOR JSON PATH
+                )
             )
-        )
-    FROM @productos_elegibles AS t120;
+        END
+        ELSE
+        BEGIN
+            SELECT ProductJSON = JSON_QUERY('[]');
+        END
 END TRY
 BEGIN CATCH
     SELECT
