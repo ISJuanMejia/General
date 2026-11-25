@@ -154,7 +154,7 @@ SELECT
 						WHERE b.ean = JSON_VALUE(item.value, '$.refId') 
 							AND b.cantidad_disponible >= TRY_CONVERT(INT, JSON_VALUE(item.value, '$.quantity'))
 						ORDER BY b.cantidad_disponible DESC
-					), '10001') AS f431_id_bodega,
+					), '') AS f431_id_bodega,
 					CONVERT(VARCHAR(8), GETDATE(), 112) AS f431_fecha_entrega,
 					'3' AS f431_num_dias_entrega,
 					JSON_VALUE(item.value, '$.quantity') AS f431_cant_pedida_base,
